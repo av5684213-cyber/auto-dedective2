@@ -1,0 +1,950 @@
+     1→================================================================================
+     2→                    CAR SCRAPER v2.2 - LOKAL OPTİMİZE
+     3→          Türkiye 2. El Araç İlanları Test Verisi Toplama Scripti
+     4→================================================================================
+     5→
+     6→BU VERSİYON LOKAL MAKİNENİZDE ÇALIŞTIRMAK İÇİN OPTİMİZE EDİLMİŞTİR.
+     7→
+     8→DEĞİŞİKLİKLER:
+     9→- headless: false (görünür mod - Cloudflare'ı geçmek için)
+    10→- Daha uzun bekleme süreleri (10-15 saniye)
+    11→- Daha fazla anti-detection katmanı
+    12→- Hata durumunda otomatik retry mekanizması
+    13→
+    14→================================================================================
+    15→                    KURULUM
+    16→================================================================================
+    17→
+    18→# 1. Proje klasörü oluştur
+    19→mkdir car-scraper
+    20→cd car-scraper
+    21→
+    22→# 2. package.json oluştur
+    23→npm init -y
+    24→
+    25→# 3. Bağımlılıkları yükle
+    26→npm install playwright
+    27→
+    28→# 4. Playwright browser'larını yükle
+    29→npx playwright install chromium
+    30→
+    31→# 5. Script'i oluştur (scraper.js)
+    32→# Aşağıdaki kod bloğunu scraper.js dosyasına kopyala
+    33→
+    34→# 6. ÇALIŞTIR
+    35→node scraper.js --site=arabam --pages=2
+    36→
+    37→================================================================================
+    38→                    SCRAPER.JS KODU (LOKAL OPTİMİZE)
+    39→================================================================================
+    40→
+    41→// ================================================================
+    42→// CAR SCRAPER v2.2 - LOKAL MAKİNE İÇİN OPTİMİZE
+    43→// ================================================================
+    44→// Kullanım:
+    45→//   node scraper.js --site=arabam --pages=2
+    46→//   node scraper.js --site=vavacars --pages=3
+    47→//   node scraper.js --site=sahibinden --pages=2
+    48→// ================================================================
+    49→
+    50→const { chromium } = require('playwright');
+    51→const fs = require('fs');
+    52→const path = require('path');
+    53→
+    54→// ================================================================
+    55→// 1. KONFIGÜRASYON - LOKAL OPTİMİZE
+    56→// ================================================================
+    57→
+    58→const CONFIG = {
+    59→  site: process.argv.includes('--site')
+    60→    ? process.argv[process.argv.indexOf('--site') + 1]
+    61→    : 'arabam',
+    62→
+    63→  maxPages: process.argv.includes('--pages')
+    64→    ? parseInt(process.argv[process.argv.indexOf('--pages') + 1])
+    65→    : 2,
+    66→
+    67→  maxTotalListings: 200,
+    68→
+    69→  // LOKAL: Daha uzun bekleme süreleri (Cloudflare'ı geçmek için)
+    70→  delays: {
+    71→    min: 8000,          // 8 saniye
+    72→    max: 15000,         // 15 saniye
+    73→    betweenPages: 12000, // Sayfalar arası 12 saniye
+    74→    afterScroll: 3000,
+    75→    afterAction: 2000,
+    76→    cloudflareWait: 30000, // Cloudflare bekleme 30 saniye
+    77→  },
+    78→
+    79→  // LOKAL: headless: false - GÖRÜNÜR MOD (Cloudflare için kritik)
+    80→  headless: false,
+    81→
+    82→  // LOKAL: Proxy kapalı (yerel IP ile dene)
+    83→  proxy: {
+    84→    enabled: false,
+    85→  },
+    86→
+    87→  // LOKAL: Retry mekanizması
+    88→  retry: {
+    89→    maxAttempts: 3,
+    90→    waitBetween: 5000,
+    91→  }
+    92→};
+    93→
+    94→// ================================================================
+    95→// 2. SİTE YAPILANDIRMALARI
+    96→// ================================================================
+    97→
+    98→const SITES = {
+    99→  arabam: {
+   100→    name: 'arabam.com',
+   101→    baseUrl: 'https://www.arabam.com',
+   102→    searchUrl: 'https://www.arabam.com/ikinci-el/otomobil',
+   103→    selectors: {
+   104→      listings: '.listing-item, .car-card, .vehicle-item, .ad-item, [data-testid="listing-card"]',
+   105→      title: '.title, .listing-title, .car-name, h3, .card-title',
+   106→      price: '.price, .listing-price, .car-price, .price-value',
+   107→      year: '.year, .model-year, .car-year, .year-value',
+   108→      km: '.km, .mileage, .car-mileage, .km-value',
+   109→      fuel: '.fuel, .fuel-type, .car-fuel, .fuel-value',
+   110→      transmission: '.transmission, .gear, .car-gear, .gear-value',
+   111→      city: '.city, .location, .car-location, .location-value',
+   112→      image: 'img, .car-image img, .listing-image img',
+   113→      link: 'a[href*="/ilan/"], a[href*="/araba/"], a.listing-link'
+   114→    },
+   115→    pagination: (page) => {
+   116→      return page === 1
+   117→        ? 'https://www.arabam.com/ikinci-el/otomobil'
+   118→        : `https://www.arabam.com/ikinci-el/otomobil?page=${page}`;
+   119→    }
+   120→  },
+   121→
+   122→  vavacars: {
+   123→    name: 'vavacars.com.tr',
+   124→    baseUrl: 'https://www.vavacars.com.tr',
+   125→    searchUrl: 'https://www.vavacars.com.tr/araba',
+   126→    selectors: {
+   127→      listings: '.vehicle-card, .car-item, .listing-item, [data-testid="vehicle-card"], .vehicle-list-item',
+   128→      title: '.title, .vehicle-title, .car-name, h3',
+   129→      price: '.price, .vehicle-price, .car-price, .price-value',
+   130→      year: '.year, .vehicle-year, .year-value',
+   131→      km: '.km, .vehicle-mileage, .km-value',
+   132→      fuel: '.fuel, .vehicle-fuel, .fuel-value',
+   133→      transmission: '.transmission, .vehicle-gear, .gear-value',
+   134→      city: '.city, .location, .location-value',
+   135→      image: 'img, .vehicle-image img, .car-image img',
+   136→      link: 'a[href*="/araba/"], a[href*="/ilan/"], a.vehicle-link'
+   137→    },
+   138→    pagination: (page) => {
+   139→      return `https://www.vavacars.com.tr/araba?page=${page}`;
+   140→    }
+   141→  },
+   142→
+   143→  sahibinden: {
+   144→    name: 'sahibinden.com',
+   145→    baseUrl: 'https://www.sahibinden.com',
+   146→    searchUrl: 'https://www.sahibinden.com/ikinci-el-araba',
+   147→    selectors: {
+   148→      listings: '.searchResultsItem, .listing-item, .search-result-item',
+   149→      title: '.listing-title, .title, .searchResultsTitle, h3',
+   150→      price: '.price, .listing-price, .searchResultsPrice, .price-tl',
+   151→      year: '.year, .listing-year, .model-year, .searchResultsYear',
+   152→      km: '.km, .mileage, .listing-km, .searchResultsKm',
+   153→      fuel: '.fuel, .fuel-type, .searchResultsFuel, .yakıt',
+   154→      transmission: '.transmission, .gear, .searchResultsTransmission, .vites',
+   155→      city: '.city, .location, .searchResultsLocation, .sehir',
+   156→      image: 'img, .listing-image img',
+   157→      link: 'a[href*="/ilan/"], a.listing-link'
+   158→    },
+   159→    pagination: (page) => {
+   160→      const offset = (page - 1) * 50;
+   161→      return `https://www.sahibinden.com/ikinci-el-araba?pagingOffset=${offset}`;
+   162→    }
+   163→  }
+   164→};
+   165→
+   166→// ================================================================
+   167→// 3. PLAYWRIGHT SCRAPER SINIFI
+   168→// ================================================================
+   169→
+   170→class CarScraper {
+   171→  constructor() {
+   172→    this.browser = null;
+   173→    this.context = null;
+   174→    this.page = null;
+   175→    this.listings = [];
+   176→    this.errors = [];
+   177→    this.startTime = Date.now();
+   178→  }
+   179→
+   180→  // ================================================================
+   181→  // 3.1. Browser Başlatma (LOKAL OPTİMİZE)
+   182→  // ================================================================
+   183→
+   184→  async init() {
+   185→    console.log('\n🚀 Browser başlatılıyor...');
+   186→    console.log('🖥️  GÖRÜNÜR MOD - Cloudflare için kritik!');
+   187→    console.log('📱 Lütfen tarayıcı penceresini kapatmayın.');
+   188→
+   189→    const launchOptions = {
+   190→      headless: CONFIG.headless, // false - görünür mod
+   191→      args: [
+   192→        '--no-sandbox',
+   193→        '--disable-setuid-sandbox',
+   194→        '--disable-dev-shm-usage',
+   195→        '--disable-accelerated-2d-canvas',
+   196→        '--disable-gpu',
+   197→        '--window-size=1920,1080',
+   198→        '--disable-blink-features=AutomationControlled',
+   199→        '--disable-web-security',
+   200→        '--disable-features=IsolateOrigins,site-per-process',
+   201→        // LOKAL: Ek anti-detection argümanları
+   202→        '--disable-infobars',
+   203→        '--disable-notifications',
+   204→        '--disable-popup-blocking',
+   205→        '--disable-save-password-bubble',
+   206→        '--disable-translate',
+   207→        '--no-default-browser-check',
+   208→        '--no-first-run',
+   209→        '--disable-background-networking',
+   210→        '--disable-sync',
+   211→        '--disable-default-apps',
+   212→        '--disable-extensions',
+   213→        '--disable-component-extensions-with-background-pages',
+   214→        '--disable-client-side-phishing-detection',
+   215→        '--disable-crash-reporter',
+   216→        '--disable-breakpad',
+   217→        '--disable-hang-monitor',
+   218→        '--disable-prompt-on-repost',
+   219→        '--disable-ipc-flooding-protection',
+   220→        '--password-store=basic',
+   221→        '--use-mock-keychain',
+   222→      ]
+   223→    };
+   224→
+   225→    // Proxy desteği
+   226→    if (CONFIG.proxy.enabled && CONFIG.proxy.server) {
+   227→      launchOptions.proxy = { server: CONFIG.proxy.server };
+   228→      if (CONFIG.proxy.username) {
+   229→        launchOptions.proxy.username = CONFIG.proxy.username;
+   230→        launchOptions.proxy.password = CONFIG.proxy.password;
+   231→      }
+   232→      console.log(`🌐 Proxy: ${CONFIG.proxy.server}`);
+   233→    }
+   234→
+   235→    this.browser = await chromium.launch(launchOptions);
+   236→
+   237→    // Context oluştur
+   238→    this.context = await this.browser.newContext({
+   239→      viewport: { width: 1920, height: 1080 },
+   240→      userAgent: this.getRandomUserAgent(),
+   241→      locale: 'tr-TR',
+   242→      timezoneId: 'Europe/Istanbul',
+   243→      permissions: ['geolocation'],
+   244→      deviceScaleFactor: 1,
+   245→      hasTouch: false,
+   246→      isMobile: false,
+   247→      javaScriptEnabled: true,
+   248→      bypassCSP: true,
+   249→      extraHTTPHeaders: {
+   250→        'Accept-Language': 'tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7',
+   251→        'Accept-Encoding': 'gzip, deflate, br',
+   252→        'Connection': 'keep-alive',
+   253→        'Upgrade-Insecure-Requests': '1',
+   254→        'Sec-Fetch-Dest': 'document',
+   255→        'Sec-Fetch-Mode': 'navigate',
+   256→        'Sec-Fetch-Site': 'none',
+   257→        'Sec-Fetch-User': '?1',
+   258→      }
+   259→    });
+   260→
+   261→    this.page = await this.context.newPage();
+   262→
+   263→    // Anti-detection script'leri enjekte et
+   264→    await this.injectAntiDetectionScripts();
+   265→
+   266→    console.log('✅ Browser hazır\n');
+   267→  }
+   268→
+   269→  // ================================================================
+   270→  // 3.2. Anti-Detection Scripts (GELİŞMİŞ)
+   271→  // ================================================================
+   272→
+   273→  async injectAntiDetectionScripts() {
+   274→    await this.page.addInitScript(() => {
+   275→      // ---- WebGL Vendor ----
+   276→      const getParameter = WebGLRenderingContext.prototype.getParameter;
+   277→      WebGLRenderingContext.prototype.getParameter = function(parameter) {
+   278→        if (parameter === 37445) return 'Intel Inc.';
+   279→        if (parameter === 37446) return 'Intel Iris OpenGL Engine';
+   280→        return getParameter.call(this, parameter);
+   281→      };
+   282→
+   283→      // ---- Canvas ----
+   284→      const getImageData = CanvasRenderingContext2D.prototype.getImageData;
+   285→      CanvasRenderingContext2D.prototype.getImageData = function(x, y, w, h) {
+   286→        const imageData = getImageData.call(this, x, y, w, h);
+   287→        const data = imageData.data;
+   288→        for (let i = 0; i < data.length; i += 4) {
+   289→          if (Math.random() < 0.001) {
+   290→            data[i] = data[i] ^ 1;
+   291→            data[i+1] = data[i+1] ^ 1;
+   292→            data[i+2] = data[i+2] ^ 1;
+   293→          }
+   294→        }
+   295→        return imageData;
+   296→      };
+   297→
+   298→      // ---- WebDriver ----
+   299→      Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+   300→
+   301→      // ---- Plugins ----
+   302→      Object.defineProperty(navigator, 'plugins', {
+   303→        get: () => [
+   304→          { name: 'Chrome PDF Plugin', filename: 'internal-pdf-viewer' },
+   305→          { name: 'Chrome PDF Viewer', filename: 'mhjfbmdgcfjbbpaeojofohoefgiehjai' },
+   306→          { name: 'Native Client', filename: 'internal-nacl-plugin' }
+   307→        ]
+   308→      });
+   309→
+   310→      // ---- Navigator ----
+   311→      Object.defineProperty(navigator, 'languages', {
+   312→        get: () => ['tr-TR', 'tr', 'en-US', 'en']
+   313→      });
+   314→      Object.defineProperty(navigator, 'platform', {
+   315→        get: () => 'Win32'
+   316→      });
+   317→      Object.defineProperty(navigator, 'hardwareConcurrency', {
+   318→        get: () => 8
+   319→      });
+   320→      Object.defineProperty(navigator, 'deviceMemory', {
+   321→        get: () => 8
+   322→      });
+   323→
+   324→      // ---- Screen ----
+   325→      Object.defineProperty(screen, 'availWidth', { get: () => 1920 });
+   326→      Object.defineProperty(screen, 'availHeight', { get: () => 1040 });
+   327→
+   328→      // ---- Battery ----
+   329→      Object.defineProperty(navigator, 'getBattery', { get: () => undefined });
+   330→
+   331→      // ---- Performance ----
+   332→      Object.defineProperty(performance, 'memory', {
+   333→        get: () => ({
+   334→          jsHeapSizeLimit: 2172649472,
+   335→          totalJSHeapSize: 10000000,
+   336→          usedJSHeapSize: 8000000
+   337→        })
+   338→      });
+   339→
+   340→      // ---- Chrome ----
+   341→      if (window.chrome) {
+   342→        Object.defineProperty(window.chrome, 'runtime', { get: () => undefined });
+   343→      }
+   344→
+   345→      // ---- WebRTC ----
+   346→      const originalRTCPeerConnection = window.RTCPeerConnection;
+   347→      window.RTCPeerConnection = function(config) {
+   348→        if (config && config.iceServers) {
+   349→          config.iceServers = config.iceServers.filter(
+   350→            server => server.url && !server.url.includes('stun')
+   351→          );
+   352→        }
+   353→        return new originalRTCPeerConnection(config);
+   354→      };
+   355→
+   356→      // ---- Permissions ----
+   357→      if (navigator.permissions && navigator.permissions.query) {
+   358→        const originalQuery = navigator.permissions.query;
+   359→        navigator.permissions.query = function(params) {
+   360→          if (params && params.name === 'geolocation') {
+   361→            return Promise.resolve({ state: 'prompt', onchange: null });
+   362→          }
+   363→          return originalQuery.call(this, params);
+   364→        };
+   365→      }
+   366→
+   367→      // ---- LOKAL: Cloudflare bypass için ek ----
+   368→      // Cloudflare'in bot tespitini aşmak için
+   369→      Object.defineProperty(navigator, 'connection', {
+   370→        get: () => ({
+   371→          rtt: 50,
+   372→          downlink: 10,
+   373→          effectiveType: '4g',
+   374→          saveData: false
+   375→        })
+   376→      });
+   377→
+   378→      // WebGL2
+   379→      const getExtension = WebGLRenderingContext.prototype.getExtension;
+   380→      WebGLRenderingContext.prototype.getExtension = function(name) {
+   381→        if (name === 'WEBGL_debug_renderer_info') return null;
+   382→        return getExtension.call(this, name);
+   383→      };
+   384→    });
+   385→  }
+   386→
+   387→  // ================================================================
+   388→  // 3.3. Random User-Agent
+   389→  // ================================================================
+   390→
+   391→  getRandomUserAgent() {
+   392→    const agents = [
+   393→      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+   394→      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
+   395→      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+   396→      'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+   397→      'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0',
+   398→      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Safari/605.1.15',
+   399→      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36 Edg/121.0.0.0'
+   400→    ];
+   401→    return agents[Math.floor(Math.random() * agents.length)];
+   402→  }
+   403→
+   404→  // ================================================================
+   405→  // 3.4. Rastgele Gecikme (LOKAL - DAHA UZUN)
+   406→  // ================================================================
+   407→
+   408→  getRandomDelay(min = CONFIG.delays.min, max = CONFIG.delays.max) {
+   409→    return Math.floor(Math.random() * (max - min + 1)) + min;
+   410→  }
+   411→
+   412→  async randomWait(min = CONFIG.delays.min, max = CONFIG.delays.max) {
+   413→    const delay = this.getRandomDelay(min, max);
+   414→    console.log(`⏳ ${delay}ms bekleniyor...`);
+   415→    await this.page.waitForTimeout(delay);
+   416→  }
+   417→
+   418→  // ================================================================
+   419→  // 3.5. Cloudflare Kontrolü
+   420→  // ================================================================
+   421→
+   422→  async checkCloudflare() {
+   423→    const html = await this.page.content();
+   424→    
+   425→    if (html.includes('cf-browser-verification') || 
+   426→        html.includes('Just a moment') || 
+   427→        html.includes('Checking your browser') ||
+   428→        html.includes('DDoS protection')) {
+   429→      console.log('☁️ Cloudflare koruması tespit edildi!');
+   430→      console.log(`⏳ ${CONFIG.delays.cloudflareWait}ms bekleniyor...`);
+   431→      await this.page.waitForTimeout(CONFIG.delays.cloudflareWait);
+   432→      return true;
+   433→    }
+   434→    return false;
+   435→  }
+   436→
+   437→  // ================================================================
+   438→  // 3.6. İnsan Davranışı Simülasyonu (LOKAL - DAHA GERÇEKÇİ)
+   439→  // ================================================================
+   440→
+   441→  async simulateHumanBehavior() {
+   442→    try {
+   443→      // ---- 1. Uzun bekleme ----
+   444→      await this.randomWait();
+   445→
+   446→      // ---- 2. Rastgele scroll ----
+   447→      const scrollCount = Math.floor(Math.random() * 5) + 3;
+   448→      for (let i = 0; i < scrollCount; i++) {
+   449→        const direction = Math.random() > 0.5 ? 1 : -1;
+   450→        const amount = Math.floor(Math.random() * 500) + 200;
+   451→        await this.page.evaluate((dir, amt) => {
+   452→          window.scrollBy({ top: dir * amt, behavior: 'smooth' });
+   453→        }, direction, amount);
+   454→        await this.page.waitForTimeout(Math.random() * 1000 + 500);
+   455→      }
+   456→
+   457→      // ---- 3. Mouse hareketi ----
+   458→      const movePoints = Math.floor(Math.random() * 4) + 2;
+   459→      for (let i = 0; i < movePoints; i++) {
+   460→        const x = Math.floor(Math.random() * 1400) + 100;
+   461→        const y = Math.floor(Math.random() * 700) + 100;
+   462→        await this.page.mouse.move(x, y, { steps: Math.floor(Math.random() * 15) + 5 });
+   463→        await this.page.waitForTimeout(Math.random() * 400 + 200);
+   464→      }
+   465→
+   466→      // ---- 4. Sayfayı en üste getir ----
+   467→      if (Math.random() > 0.6) {
+   468→        await this.page.evaluate(() => window.scrollTo({ top: 0, behavior: 'smooth' }));
+   469→        await this.page.waitForTimeout(Math.random() * 600 + 400);
+   470→      }
+   471→
+   472→      // ---- 5. Link hover ----
+   473→      try {
+   474→        const links = await this.page.$$('a[href]');
+   475→        if (links.length > 0) {
+   476→          const randomLink = links[Math.floor(Math.random() * links.length)];
+   477→          await randomLink.hover();
+   478→          await this.page.waitForTimeout(Math.random() * 500 + 300);
+   479→        }
+   480→      } catch (e) {}
+   481→
+   482→      console.log('👤 İnsan davranışı simüle edildi');
+   483→
+   484→    } catch (error) {
+   485→      console.log('⚠️ Davranış simülasyonu hatası:', error.message);
+   486→    }
+   487→  }
+   488→
+   489→  // ================================================================
+   490→  // 3.7. Sayfa Scraping (RETRY MEKANİZMALI)
+   491→  // ================================================================
+   492→
+   493→  async scrapePage(url, siteConfig, pageNumber) {
+   494→    console.log(`\n📄 Sayfa ${pageNumber}: ${url}`);
+   495→
+   496→    let attempt = 0;
+   497→    const maxAttempts = CONFIG.retry.maxAttempts;
+   498→
+   499→    while (attempt < maxAttempts) {
+   500→      attempt++;
+   501→      try {
+   502→        // ---- Sayfaya git ----
+   503→        console.log(`   Deneme ${attempt}/${maxAttempts}`);
+   504→        await this.page.goto(url, {
+   505→          waitUntil: 'networkidle',
+   506→          timeout: 60000
+   507→        });
+   508→
+   509→        // ---- Cloudflare kontrolü ----
+   510→        const isCloudflare = await this.checkCloudflare();
+   511→        if (isCloudflare) {
+   512→          console.log('☁️ Cloudflare tespit edildi, bekleniyor...');
+   513→          await this.page.waitForTimeout(CONFIG.delays.cloudflareWait);
+   514→          continue;
+   515→        }
+   516→
+   517→        // ---- İnsan davranışı ----
+   518→        await this.simulateHumanBehavior();
+   519→
+   520→        // ---- İlan listesini bul ----
+   521→        try {
+   522→          await this.page.waitForSelector(siteConfig.selectors.listings, {
+   523→            timeout: 20000
+   524→          });
+   525→          console.log('✅ İlan listesi bulundu');
+   526→        } catch (e) {
+   527→          console.log('⚠️ İlan listesi bulunamadı...');
+   528→          // Sayfa içeriğini kontrol et
+   529→          const html = await this.page.content();
+   530→          if (html.includes('403') || html.includes('Access Denied')) {
+   531→            console.log('🚫 403 Forbidden!');
+   532→            throw new Error('403 Forbidden');
+   533→          }
+   534→          continue;
+   535→        }
+   536→
+   537→        // ---- İlanları çek ----
+   538→        const pageListings = await this.page.evaluate((selectors, siteName) => {
+   539→          const items = [];
+   540→          const selectorList = selectors.listings.split(', ');
+   541→          let elements = [];
+   542→
+   543→          for (const selector of selectorList) {
+   544→            const found = document.querySelectorAll(selector);
+   545→            if (found.length > 0) {
+   546→              elements = found;
+   547→              break;
+   548→            }
+   549→          }
+   550→
+   551→          if (elements.length === 0) {
+   552→            return items;
+   553→          }
+   554→
+   555→          elements.forEach((el, index) => {
+   556→            try {
+   557→              const linkEl = el.querySelector(selectors.link) || el.querySelector('a');
+   558→              let link = linkEl ? linkEl.getAttribute('href') : '';
+   559→              if (link && !link.startsWith('http')) {
+   560→                link = `https://${siteName}${link.startsWith('/') ? '' : '/'}${link}`;
+   561→              }
+   562→
+   563→              const titleEl = el.querySelector(selectors.title);
+   564→              const title = titleEl ? titleEl.textContent.trim() : '';
+   565→
+   566→              const priceEl = el.querySelector(selectors.price);
+   567→              let price = 0;
+   568→              if (priceEl) {
+   569→                const priceText = priceEl.textContent.trim();
+   570→                const cleaned = priceText
+   571→                  .replace(/[^0-9,.]/g, '')
+   572→                  .replace(/\./g, '')
+   573→                  .replace(/,/g, '.');
+   574→                price = parseFloat(cleaned) || 0;
+   575→              }
+   576→
+   577→              const yearEl = el.querySelector(selectors.year);
+   578→              const year = yearEl ? parseInt(yearEl.textContent.trim()) : 0;
+   579→
+   580→              const kmEl = el.querySelector(selectors.km);
+   581→              let km = 0;
+   582→              if (kmEl) {
+   583→                const kmText = kmEl.textContent.trim();
+   584→                km = parseInt(kmText.replace(/[^0-9]/g, '')) || 0;
+   585→              }
+   586→
+   587→              const fuelEl = el.querySelector(selectors.fuel);
+   588→              const fuel = fuelEl ? fuelEl.textContent.trim() : '';
+   589→
+   590→              const transEl = el.querySelector(selectors.transmission);
+   591→              const transmission = transEl ? transEl.textContent.trim() : '';
+   592→
+   593→              const cityEl = el.querySelector(selectors.city);
+   594→              const city = cityEl ? cityEl.textContent.trim() : '';
+   595→
+   596→              const imgEl = el.querySelector(selectors.image);
+   597→              let imageUrl = '';
+   598→              if (imgEl) {
+   599→                imageUrl = imgEl.getAttribute('src') ||
+   600→                           imgEl.getAttribute('data-src') ||
+   601→                           imgEl.getAttribute('srcset')?.split(' ')[0] ||
+   602→                           '';
+   603→              }
+   604→
+   605→              let make = '';
+   606→              let model = '';
+   607→              if (title) {
+   608→                const parts = title.trim().split(' ');
+   609→                const makes = ['ford', 'opel', 'vw', 'volkswagen', 'bmw', 'mercedes', 'audi',
+   610→                  'toyota', 'renault', 'fiat', 'hyundai', 'nissan', 'honda', 'peugeot',
+   611→                  'citroen', 'skoda', 'seat', 'kia', 'mazda', 'volvo', 'mini', 'smart',
+   612→                  'subaru', 'suzuki', 'mitsubishi', 'dacia', 'chery', 'togg', 'tesla',
+   613→                  'alfa', 'romeo', 'abarth', 'lancia', 'dodge', 'chevrolet', 'chrysler',
+   614→                  'jeep', 'cadillac', 'infiniti', 'acura', 'lexus'];
+   615→
+   616→                if (parts.length >= 2) {
+   617→                  const twoWord = `${parts[0].toLowerCase()} ${parts[1].toLowerCase()}`;
+   618→                  if (twoWord === 'alfa romeo' || twoWord === 'land rover') {
+   619→                    make = parts[0] + ' ' + parts[1];
+   620→                    model = parts.slice(2).join(' ');
+   621→                  } else if (makes.includes(parts[0].toLowerCase())) {
+   622→                    make = parts[0];
+   623→                    model = parts.slice(1).join(' ');
+   624→                  } else {
+   625→                    make = parts[0];
+   626→                    model = parts.slice(1).join(' ');
+   627→                  }
+   628→                } else {
+   629→                  make = parts[0] || '';
+   630→                }
+   631→              }
+   632→
+   633→              if (price > 0 || title) {
+   634→                items.push({
+   635→                  source_name: siteName,
+   636→                  source_url: link || '',
+   637→                  make: make || '',
+   638→                  model: model || '',
+   639→                  title: title || '',
+   640→                  year: year || 0,
+   641→                  price: price || 0,
+   642→                  currency: 'TRY',
+   643→                  mileage_km: km > 0 ? km : undefined,
+   644→                  fuel_type: fuel || undefined,
+   645→                  transmission: transmission || undefined,
+   646→                  city: city || undefined,
+   647→                  image_url: imageUrl || undefined,
+   648→                  scraped_at: new Date().toISOString(),
+   649→                  _index: index + 1
+   650→                });
+   651→              }
+   652→
+   653→            } catch (error) {
+   654→              console.log(`⚠️ İlan ${index + 1} parse hatası:`, error.message);
+   655→            }
+   656→          });
+   657→
+   658→          return items;
+   659→        }, siteConfig.selectors, siteConfig.name);
+   660→
+   661→        console.log(`✅ ${pageListings.length} ilan çekildi`);
+   662→        return pageListings;
+   663→
+   664→      } catch (error) {
+   665→        console.log(`❌ Deneme ${attempt} hatası:`, error.message);
+   666→
+   667→        if (attempt < maxAttempts) {
+   668→          const waitTime = CONFIG.retry.waitBetween * attempt;
+   669→          console.log(`⏳ ${waitTime}ms beklenip yeniden deneniyor...`);
+   670→          await this.page.waitForTimeout(waitTime);
+   671→        } else {
+   672→          this.errors.push({
+   673→            page: pageNumber,
+   674→            url: url,
+   675→            error: error.message,
+   676→            attempts: attempt
+   677→          });
+   678→          return [];
+   679→        }
+   680→      }
+   681→    }
+   682→
+   683→    return [];
+   684→  }
+   685→
+   686→  // ================================================================
+   687→  // 3.8. Ana Scraping Metodu
+   688→  // ================================================================
+   689→
+   690→  async scrape() {
+   691→    try {
+   692→      const siteKey = CONFIG.site;
+   693→      const siteConfig = SITES[siteKey];
+   694→
+   695→      if (!siteConfig) {
+   696→        console.error(`❌ Geçersiz site: ${siteKey}`);
+   697→        console.log(`📋 Mevcut siteler: ${Object.keys(SITES).join(', ')}`);
+   698→        return;
+   699→      }
+   700→
+   701→      console.log('═══════════════════════════════════════════════════');
+   702→      console.log('🚗 CAR SCRAPER v2.2 - LOKAL OPTİMİZE');
+   703→      console.log('═══════════════════════════════════════════════════');
+   704→      console.log(`📍 Hedef site: ${siteConfig.name}`);
+   705→      console.log(`📄 Max sayfa: ${CONFIG.maxPages}`);
+   706→      console.log(`📊 Max ilan: ${CONFIG.maxTotalListings}`);
+   707→      console.log(`🖥️  Görünür mod: EVET (Cloudflare için kritik)`);
+   708→      console.log('═══════════════════════════════════════════════════\n');
+   709→
+   710→      await this.init();
+   711→
+   712→      for (let pageNum = 1; pageNum <= CONFIG.maxPages; pageNum++) {
+   713→        if (this.listings.length >= CONFIG.maxTotalListings) {
+   714→          console.log(`\n✅ ${CONFIG.maxTotalListings} ilan hedefine ulaşıldı.`);
+   715→          break;
+   716→        }
+   717→
+   718→        const url = siteConfig.pagination(pageNum);
+   719→        console.log(`\n🌐 Sayfa ${pageNum}: ${url}`);
+   720→
+   721→        const pageListings = await this.scrapePage(url, siteConfig, pageNum);
+   722→
+   723→        const remaining = CONFIG.maxTotalListings - this.listings.length;
+   724→        const toAdd = pageListings.slice(0, remaining);
+   725→        this.listings.push(...toAdd);
+   726→
+   727→        console.log(`📦 Toplam: ${this.listings.length}/${CONFIG.maxTotalListings} ilan`);
+   728→
+   729→        if (pageNum < CONFIG.maxPages && this.listings.length < CONFIG.maxTotalListings) {
+   730→          console.log(`⏳ Sayfalar arası ${CONFIG.delays.betweenPages}ms bekleniyor...`);
+   731→          await this.page.waitForTimeout(CONFIG.delays.betweenPages);
+   732→        }
+   733→      }
+   734→
+   735→      this.saveResults();
+   736→
+   737→      if (this.errors.length > 0) {
+   738→        console.log(`\n⚠️ ${this.errors.length} hata oluştu:`);
+   739→        this.errors.forEach((err, i) => {
+   740→          console.log(`   ${i + 1}. Sayfa ${err.page}: ${err.error}`);
+   741→        });
+   742→      }
+   743→
+   744→    } catch (error) {
+   745→      console.error('\n❌ Scraping hatası:', error);
+   746→    } finally {
+   747→      if (this.browser) {
+   748→        await this.browser.close();
+   749→        console.log('\n🔒 Browser kapatıldı');
+   750→      }
+   751→    }
+   752→  }
+   753→
+   754→  // ================================================================
+   755→  // 3.9. Sonuçları Kaydet
+   756→  // ================================================================
+   757→
+   758→  saveResults() {
+   759→    const duration = (Date.now() - this.startTime) / 1000;
+   760→
+   761→    const output = {
+   762→      metadata: {
+   763→        site: CONFIG.site,
+   764→        scraped_at: new Date().toISOString(),
+   765→        total_listings: this.listings.length,
+   766→        total_pages: CONFIG.maxPages,
+   767→        duration_seconds: Math.round(duration),
+   768→        config: {
+   769→          max_pages: CONFIG.maxPages,
+   770→          max_total_listings: CONFIG.maxTotalListings,
+   771→          delays: CONFIG.delays,
+   772→          headless: CONFIG.headless,
+   773→          proxy_enabled: CONFIG.proxy.enabled
+   774→        }
+   775→      },
+   776→      errors: this.errors,
+   777→      listings: this.listings
+   778→    };
+   779→
+   780→    const outputPath = path.join(__dirname, 'mock_data.json');
+   781→    fs.writeFileSync(outputPath, JSON.stringify(output, null, 2));
+   782→
+   783→    console.log('\n═══════════════════════════════════════════════════');
+   784→    console.log('✅ VERİLER KAYDEDİLDİ!');
+   785→    console.log(`📁 Dosya: ${outputPath}`);
+   786→    console.log(`📊 Toplam ilan: ${this.listings.length}`);
+   787→    console.log(`⏱️  Süre: ${Math.round(duration)} saniye`);
+   788→    console.log('═══════════════════════════════════════════════════');
+   789→
+   790→    if (this.listings.length > 0) {
+   791→      const validPrices = this.listings.filter(l => l.price > 0);
+   792→      if (validPrices.length > 0) {
+   793→        const prices = validPrices.map(l => l.price);
+   794→        const avg = Math.round(prices.reduce((a, b) => a + b, 0) / prices.length);
+   795→        const min = Math.min(...prices);
+   796→        const max = Math.max(...prices);
+   797→        console.log('\n💰 Fiyat İstatistikleri:');
+   798→        console.log(`   Min: ${min.toLocaleString()} TL`);
+   799→        console.log(`   Max: ${max.toLocaleString()} TL`);
+   800→        console.log(`   Ort: ${avg.toLocaleString()} TL`);
+   801→      }
+   802→
+   803→      const makes = {};
+   804→      this.listings.forEach(l => {
+   805→        const m = l.make || 'Bilinmiyor';
+   806→        makes[m] = (makes[m] || 0) + 1;
+   807→      });
+   808→      const sortedMakes = Object.entries(makes)
+   809→        .sort((a, b) => b[1] - a[1])
+   810→        .slice(0, 5);
+   811→
+   812→      if (sortedMakes.length > 0) {
+   813→        console.log('\n🏷️  En Çok Görülen Markalar:');
+   814→        sortedMakes.forEach(([make, count]) => {
+   815→          const pct = Math.round((count / this.listings.length) * 100);
+   816→          console.log(`   ${make}: ${count} ilan (${pct}%)`);
+   817→        });
+   818→      }
+   819→
+   820→      console.log('\n📊 Örnek Veri (ilk 3 ilan):');
+   821→      this.listings.slice(0, 3).forEach((l, i) => {
+   822→        console.log(`   ${i + 1}. ${l.make} ${l.model} - ${l.price.toLocaleString()} TL`);
+   823→      });
+   824→    }
+   825→
+   826→    console.log('\n═══════════════════════════════════════════════════');
+   827→  }
+   828→}
+   829→
+   830→// ================================================================
+   831→// 4. ANA PROGRAM
+   832→// ================================================================
+   833→
+   834→async function main() {
+   835→  const scraper = new CarScraper();
+   836→  await scraper.scrape();
+   837→}
+   838→
+   839→process.on('unhandledRejection', (error) => {
+   840→  console.error('❌ Unhandled Rejection:', error);
+   841→  process.exit(1);
+   842→});
+   843→
+   844→process.on('SIGINT', async () => {
+   845→  console.log('\n⏹️  İptal edildi, temizleniyor...');
+   846→  process.exit(0);
+   847→});
+   848→
+   849→if (require.main === module) {
+   850→  main().catch(console.error);
+   851→}
+   852→
+   853→module.exports = { CarScraper, SITES, CONFIG };
+   854→
+   855→================================================================================
+   856→                    ÇALIŞTIRMA TALİMATLARI (LOKAL)
+   857→================================================================================
+   858→
+   859→# 1. Önce bir site dene (2 sayfa)
+   860→node scraper.js --site=arabam --pages=2
+   861→
+   862→# 2. Eğer 403 alırsan, tarayıcı penceresinde manuel Cloudflare doğrulaması yap
+   863→#    - Sayfa "Bir dakika lütfen..." gösteriyorsa bekle
+   864→#    - Bazen 30 saniye sürebilir
+   865→
+   866→# 3. Başarılı olursa daha fazla sayfa dene
+   867→node scraper.js --site=arabam --pages=5
+   868→
+   869→# 4. VavaCars dene (DNS sorunu varsa Türkiye VPN ile dene)
+   870→node scraper.js --site=vavacars --pages=2
+   871→
+   872→# 5. Sahibinden dene (en stabil)
+   873→node scraper.js --site=sahibinden --pages=2
+   874→
+   875→================================================================================
+   876→                    PROXY İLE ÇALIŞTIRMA (OPSİYONEL)
+   877→================================================================================
+   878→
+   879→Eğer lokalde de Cloudflare takılırsa, proxy kullanarak dene:
+   880→
+   881→1. CONFIG.proxy.enabled = true yap
+   882→2. CONFIG.proxy.server = 'http://proxy-sunucun:8080' yaz
+   883→3. Tekrar çalıştır
+   884→
+   885→# Örnek: BrightData proxy
+   886→# CONFIG.proxy.server = 'http://brd-customer-xxx:password@proxy.brightdata.com:22225'
+   887→
+   888→================================================================================
+   889→                    SIK KARŞILAŞILAN SORUNLAR VE ÇÖZÜMLERİ
+   890→================================================================================
+   891→
+   892→| Sorun | Çözüm |
+   893→|-------|-------|
+   894→| 403 Forbidden | headless: false dene, manuel Cloudflare doğrulaması yap |
+   895→| Cloudflare döngüsü | Tarayıcı penceresinde manuel doğrulama yap, script bekleyecek |
+   896→| DNS çözülemiyor | Türkiye VPN ile dene veya farklı site dene |
+   897→| Çok yavaş | Bekleme sürelerini azalt (CONFIG.delays) |
+   898→| Veri gelmiyor | Farklı selector dene veya site yapısı değişmiş olabilir |
+   899→| Memory error | maxPages değerini düşür |
+   900→
+   901→================================================================================
+   902→                    NOT
+   903→================================================================================
+   904→
+   905→Bu script LOKAL MAKİNENİZDE çalıştırılmak üzere tasarlanmıştır.
+   906→Cloudflare engeli nedeniyle server-side çalışmıyor.
+   907→
+   908→Eğer lokalde başarılı olursa, elde ettiğin mock_data.json dosyasını 
+   909→bana gönder, veritabanına import edelim.
+   910→
+   911→================================================================================
+   912→2. PROXY ENTEGRASYONLU VERSİYON (BrightData Örneği)
+   913→Eğer lokalde de Cloudflare takılırsa, proxy ile dene:
+   914→
+   915→javascript
+   916→// CONFIG kısmını şu şekilde güncelle:
+   917→
+   918→const CONFIG = {
+   919→  // ... diğer ayarlar aynı ...
+   920→  
+   921→  proxy: {
+   922→    enabled: true,
+   923→    server: 'http://brd-customer-xxxxx:password@proxy.brightdata.com:22225',
+   924→    // BrightData veya herhangi bir proxy servisi
+   925→  }
+   926→};
+   927→3. YAPILACAKLAR LİSTESİ
+   928→Lokalinde çalıştır:
+   929→
+   930→bash
+   931→node scraper.js --site=arabam --pages=2
+   932→Başarılı olursa:
+   933→
+   934→mock_data.json dosyasını bana gönder
+   935→
+   936→Veritabanına import edelim
+   937→
+   938→Başarısız olursa:
+   939→
+   940→Proxy dene (BrightData, Luminati, vb.)
+   941→
+   942→Veya VPN ile dene
+   943→
+   944→VavaCars için:
+   945→
+   946→Türkiye VPN ile dene (DNS engeli var)
+   947→
+   948→Veya bir Türkiye proxy'si kullan
+   949→
+   950→Bu script artık lokalinde çalıştırmaya hazır. Cloudflare'ı geçmek için headless: false modunda çalışıyor. Tarayıcı penceresi açılacak ve manuel doğrulama yapabileceksin. Başarılı olursa verileri bana gönder.
