@@ -1,4 +1,5 @@
 'use client'
+// AracıKıyas - Last update: 1781990625
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
