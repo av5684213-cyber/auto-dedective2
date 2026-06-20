@@ -1,0 +1,796 @@
+     1→     1→import axios, { type AxiosRequestConfig } from 'axios';
+     2→     2→import { RateLimiter, getRateLimiter } from '@/lib/utils/rate-limiter';
+     3→     3→import {
+     4→     4→  TURKISH_MAKES,
+     5→     5→  TURKISH_CITIES,
+     6→     6→  FUEL_TYPES,
+     7→     7→  TRANSMISSIONS,
+     8→     8→  BODY_TYPES,
+     9→     9→  SELLER_TYPES,
+    10→    10→  MAKE_MODELS,
+    11→    11→  ISTANBUL_DISTRICTS,
+    12→    12→  ANKARA_DISTRICTS,
+    13→    13→  IZMIR_DISTRICTS,
+    14→    14→  COLORS_TR,
+    15→    15→} from '@/lib/constants';
+    16→    16→
+    17→    17→// ═══════════════════════════════════════════════════════════════════
+    18→    18→// Interfaces
+    19→    19→// ═══════════════════════════════════════════════════════════════════
+    20→    20→
+    21→    21→export interface SearchFilters {
+    22→    22→  make?: string;
+    23→    23→  model?: string;
+    24→    24→  yearMin?: number;
+    25→    25→  yearMax?: number;
+    26→    26→  priceMin?: number;
+    27→    27→  priceMax?: number;
+    28→    28→  mileageMax?: number;
+    29→    29→  fuelType?: string;
+    30→    30→  transmission?: string;
+    31→    31→  city?: string;
+    32→    32→  page?: number;
+    33→    33→  limit?: number;
+    34→    34→}
+    35→    35→
+    36→    36→export interface ListingRaw {
+    37→    37→  id?: string;
+    38→    38→  sourceName: string;
+    39→    39→  sourceUrl: string;
+    40→    40→  vin?: string;
+    41→    41→  make: string;
+    42→    42→  model: string;
+    43→    43→  trim?: string;
+    44→    44→  year: number;
+    45→    45→  price: number;
+    46→    46→  currency?: string;
+    47→    47→  mileageKm?: number;
+    48→    48→  fuelType?: string;
+    49→    49→  transmission?: string;
+    50→    50→  bodyType?: string;
+    51→    51→  color?: string;
+    52→    52→  city?: string;
+    53→    53→  district?: string;
+    54→    54→  sellerType?: string;
+    55→    55→  imageUrl?: string;
+    56→    56→  imageUrls?: string[];
+    57→    57→  description?: string;
+    58→    58→  firstSeenAt?: Date;
+    59→    59→  lastSeenAt?: Date;
+    60→    60→  isActive?: boolean;
+    61→    61→}
+    62→    62→
+    63→    63→export interface AdapterResult {
+    64→    64→  success: boolean;
+    65→    65→  listings: ListingRaw[];
+    66→    66→  totalFound: number;
+    67→    67→  error?: string;
+    68→    68→  durationMs: number;
+    69→    69→}
+    70→    70→
+    71→    71→// ═══════════════════════════════════════════════════════════════════
+    72→    72→// User-Agent Pool
+    73→    73→// ═══════════════════════════════════════════════════════════════════
+    74→    74→
+    75→    75→const USER_AGENTS = [
+    76→    76→  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
+    77→    77→  'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_5) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Safari/605.1.15',
+    78→    78→  'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:126.0) Gecko/20100101 Firefox/126.0',
+    79→    79→  'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
+    80→    80→  'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
+    81→    81→  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36 OPR/110.0.0.0',
+    82→    82→  'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1',
+    83→    83→];
+    84→    84→
+    85→    85→// ═══════════════════════════════════════════════════════════════════
+    86→    86→// Normalization Maps
+    87→    87→// ═══════════════════════════════════════════════════════════════════
+    88→    88→
+    89→    89→const MAKE_NORMALIZE: Record<string, string> = {
+    90→    90→  'vw': 'Volkswagen',
+    91→    91→  'mercedes': 'Mercedes-Benz',
+    92→    92→  'mercedes benz': 'Mercedes-Benz',
+    93→    93→  'bmw': 'BMW',
+    94→    94→  'alfa': 'Alfa Romeo',
+    95→    95→  'land rover': 'Land Rover',
+    96→    96→  'range rover': 'Land Rover',
+    97→    97→  'mini cooper': 'Mini',
+    98→    98→  'hyundai': 'Hyundai',
+    99→    99→  'honda': 'Honda',
+   100→   100→  'toyota': 'Toyota',
+   101→   101→  'ford': 'Ford',
+   102→   102→  'renault': 'Renault',
+   103→   103→  'fiat': 'Fiat',
+   104→   104→  'peugeot': 'Peugeot',
+   105→   105→  'opel': 'Opel',
+   106→   106→  'citroen': 'Citroen',
+   107→   107→  'volvo': 'Volvo',
+   108→   108→  'mazda': 'Mazda',
+   109→   109→  'nissan': 'Nissan',
+   110→   110→  'kia': 'Kia',
+   111→   111→  'skoda': 'Skoda',
+   112→   112→  'seat': 'Seat',
+   113→   113→  'suzuki': 'Suzuki',
+   114→   114→  'mitsubishi': 'Mitsubishi',
+   115→   115→  'chevrolet': 'Chevrolet',
+   116→   116→  'jeep': 'Jeep',
+   117→   117→  'lexus': 'Lexus',
+   118→   118→  'infiniti': 'Infiniti',
+   119→   119→  'dacia': 'Dacia',
+   120→   120→  'tofaş': 'Tofaş',
+   121→   121→  'tofas': 'Tofaş',
+   122→   122→  'audi': 'Audi',
+   123→   123→};
+   124→   124→
+   125→   125→const MODEL_NORMALIZE: Record<string, string> = {
+   126→   126→  '3 serisi': '3 Serisi',
+   127→   127→  '5 serisi': '5 Serisi',
+   128→   128→  '1 serisi': '1 Serisi',
+   129→   129→  '4 serisi': '4 Serisi',
+   130→   130→  '7 serisi': '7 Serisi',
+   131→   131→  '2 serisi': '2 Serisi',
+   132→   132→  'c serisi': 'C Serisi',
+   133→   133→  'e serisi': 'E Serisi',
+   134→   134→  'a serisi': 'A Serisi',
+   135→   135→  's serisi': 'S Serisi',
+   136→   136→  'b serisi': 'B Serisi',
+   137→   137→};
+   138→   138→
+   139→   139→const FUEL_NORMALIZE: Record<string, string> = {
+   140→   140→  'benzin': 'Benzin',
+   141→   141→  'dizel': 'Dizel',
+   142→   142→  'lpg': 'LPG',
+   143→   143→  'elektrik': 'Elektrik',
+   144→   144→  'hibrit': 'Hybrid',
+   145→   145→  'hybrid': 'Hybrid',
+   146→   146→  'benzin+lpg': 'Benzin + LPG',
+   147→   147→  'benzin + lpg': 'Benzin + LPG',
+   148→   148→  'benzin&lpg': 'Benzin + LPG',
+   149→   149→  'dizel+lpg': 'Dizel + LPG',
+   150→   150→  'dizel + lpg': 'Dizel + LPG',
+   151→   151→};
+   152→   152→
+   153→   153→const TRANSMISSION_NORMALIZE: Record<string, string> = {
+   154→   154→  'manuel': 'Manuel',
+   155→   155→  'otomatik': 'Otomatik',
+   156→   156→  'yarı otomatik': 'Yarı Otomatik',
+   157→   157→  'yari otomatik': 'Yarı Otomatik',
+   158→   158→  'dsg': 'Yarı Otomatik',
+   159→   159→  'cvt': 'Yarı Otomatik',
+   160→   160→  'otomatik vites': 'Otomatik',
+   161→   161→  'manuel vites': 'Manuel',
+   162→   162→  'triptonic': 'Yarı Otomatik',
+   163→   163→  'tiptronic': 'Yarı Otomatik',
+   164→   164→  'dualogic': 'Yarı Otomatik',
+   165→   165→  'robotize': 'Yarı Otomatik',
+   166→   166→  'amt': 'Yarı Otomatik',
+   167→   167→};
+   168→   168→
+   169→   169→const BODY_NORMALIZE: Record<string, string> = {
+   170→   170→  'sedan': 'Sedan',
+   171→   171→  'hatchback': 'Hatchback',
+   172→   172→  'suv': 'SUV',
+   173→   173→  'station': 'Station',
+   174→   174→  'kombi': 'Station',
+   175→   175→  'station wagon': 'Station',
+   176→   176→  'kupé': 'Coupe',
+   177→   177→  'kuppe': 'Coupe',
+   178→   178→  'coupe': 'Coupe',
+   179→   179→  'cabrio': 'Cabrio',
+   180→   180→  'cabriolet': 'Cabrio',
+   181→   181→  'mpv': 'MPV',
+   182→   182→  'minivan': 'MPV',
+   183→   183→  'pickup': 'Pickup',
+   184→   184→  'kamyonet': 'Pickup',
+   185→   185→  'roadster': 'Cabrio',
+   186→   186→};
+   187→   187→
+   188→   188→const SELLER_NORMALIZE: Record<string, string> = {
+   189→   189→  'sahibinden': 'Sahibinden',
+   190→   190→  'galeri': 'Galeri',
+   191→   191→  'galeriden': 'Galeri',
+   192→   192→  'yetkili bayi': 'Yetkili Bayi',
+   193→   193→  'yetkili': 'Yetkili Bayi',
+   194→   194→  'kurumsal': 'Galeri',
+   195→   195→  'bayi': 'Yetkili Bayi',
+   196→   196→};
+   197→   197→
+   198→   198→// ═══════════════════════════════════════════════════════════════════
+   199→   199→// Abstract Base Adapter
+   200→   200→// ═══════════════════════════════════════════════════════════════════
+   201→   201→
+   202→   202→export abstract class BaseAdapter {
+   203→   203→  abstract sourceName: string;
+   204→   204→  abstract baseUrl: string;
+   205→   205→  abstract defaultDelay: number;
+   206→   206→  abstract maxConcurrency: number;
+   207→   207→
+   208→   208→  // Per-adapter rate limiter (lazily created)
+   209→   209→  private _rateLimiter: RateLimiter | null = null;
+   210→   210→
+   211→   211→  // ── Required abstract methods ──────────────────────────────────
+   212→   212→
+   213→   213→  /** Scrape listings from the real source with the given filters */
+   214→   214→  abstract search(filters: SearchFilters): Promise<AdapterResult>;
+   215→   215→
+   216→   216→  /** Parse a raw scraped element into a ListingRaw */
+   217→   217→  abstract parseListing(raw: unknown): ListingRaw;
+   218→   218→
+   219→   219→  /** Fetch detail page for a single listing */
+   220→   220→  abstract getDetail(listingId: string): Promise<ListingRaw | null>;
+   221→   221→
+   222→   222→  /** Provide mock/fallback data when real scraping fails */
+   223→   223→  abstract scrapeFallback(): Promise<ListingRaw[]>;
+   224→   224→
+   225→   225→  // ── Smart scrape with fallback ─────────────────────────────────
+   226→   226→
+   227→   227→  /**
+   228→   228→   * Smart search: tries real scraping first, falls back to mock data
+   229→   229→   * when the real site is unreachable or returns unexpected results.
+   230→   230→   */
+   231→   231→  async scrape(filters?: SearchFilters): Promise<AdapterResult> {
+   232→   232→    const start = Date.now();
+   233→   233→
+   234→   234→    try {
+   235→   235→      // Attempt real scraping with a generous timeout (30 s)
+   236→   236→      const realResult = await Promise.race([
+   237→   237→        this.search(filters ?? {}),
+   238→   238→        new Promise<never>((_, reject) =>
+   239→   239→          setTimeout(() => reject(new Error('Scraping timeout')), 30_000),
+   240→   240→        ),
+   241→   241→      ]);
+   242→   242→
+   243→   243→      if (realResult.success && realResult.listings.length > 0) {
+   244→   244→        return realResult;
+   245→   245→      }
+   246→   246→
+   247→   247→      // Real scraping returned 0 listings — fall through to fallback
+   248→   248→      this.log(
+   249→   249→        `Real scraping returned 0 listings for "${this.sourceName}", using fallback`,
+   250→   250→        'warn',
+   251→   251→      );
+   252→   252→    } catch (err) {
+   253→   253→      this.log(
+   254→   254→        `Real scraping failed for "${this.sourceName}": ${err instanceof Error ? err.message : String(err)}`,
+   255→   255→        'warn',
+   256→   256→      );
+   257→   257→    }
+   258→   258→
+   259→   259→    // Fallback to mock data
+   260→   260→    try {
+   261→   261→      const fallbackListings = await this.scrapeFallback();
+   262→   262→      return {
+   263→   263→        success: true,
+   264→   264→        listings: fallbackListings,
+   265→   265→        totalFound: fallbackListings.length,
+   266→   266→        durationMs: Date.now() - start,
+   267→   267→      };
+   268→   268→    } catch (fallbackErr) {
+   269→   269→      return {
+   270→   270→        success: false,
+   271→   271→        listings: [],
+   272→   272→        totalFound: 0,
+   273→   273→        error: fallbackErr instanceof Error ? fallbackErr.message : 'Both real and fallback scraping failed',
+   274→   274→        durationMs: Date.now() - start,
+   275→   275→      };
+   276→   276→    }
+   277→   277→  }
+   278→   278→
+   279→   279→  // ── Polite fetching ────────────────────────────────────────────
+   280→   280→
+   281→   281→  /**
+   282→   282→   * Fetch with rate limiting, retries, User-Agent rotation, and
+   283→   283→   * exponential back-off.  Returns the HTML string body.
+   284→   284→   */
+   285→   285→  async fetchWithPoliteness(url: string, options?: AxiosRequestConfig): Promise<string> {
+   286→   286→    const limiter = this.getRateLimiter();
+   287→   287→    await limiter.wait();
+   288→   288→
+   289→   289→    const maxRetries = 3;
+   290→   290→
+   291→   291→    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+   292→   292→      try {
+   293→   293→        // Random delay to look more human
+   294→   294→        const delay = this.defaultDelay + Math.random() * this.defaultDelay;
+   295→   295→        await this.sleep(delay);
+   296→   296→
+   297→   297→        const config: AxiosRequestConfig = {
+   298→   298→          ...options,
+   299→   299→          url,
+   300→   300→          method: options?.method ?? 'GET',
+   301→   301→          headers: {
+   302→   302→            ...(options?.headers ?? {}),
+   303→   303→            'User-Agent': this.getUserAgent(),
+   304→   304→            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+   305→   305→            'Accept-Language': 'tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7',
+   306→   306→            'Accept-Encoding': 'gzip, deflate, br',
+   307→   307→            'Cache-Control': 'no-cache',
+   308→   308→          },
+   309→   309→          timeout: options?.timeout ?? 15_000,
+   310→   310→          validateStatus: (status: number) => status < 500, // don't throw on 4xx
+   311→   311→          ...(this.shouldUseProxy() ? { proxy: this.getProxyConfig() } : {}),
+   312→   312→        };
+   313→   313→
+   314→   314→        const response = await axios(config);
+   315→   315→
+   316→   316→        // Handle rate-limit responses
+   317→   317→        if (response.status === 429) {
+   318→   318→          this.log(`Rate limited (429) on attempt ${attempt}/${maxRetries} for ${url}`, 'warn');
+   319→   319→          await this.handleRateLimit({ status: 429 });
+   320→   320→          continue;
+   321→   321→        }
+   322→   322→
+   323→   323→        if (response.status === 403) {
+   324→   324→          this.log(`Forbidden (403) on attempt ${attempt}/${maxRetries} for ${url}`, 'warn');
+   325→   325→          // Wait longer for 403 — might be a temporary block
+   326→   326→          await this.sleep(this.defaultDelay * 4 * attempt);
+   327→   327→          continue;
+   328→   328→        }
+   329→   329→
+   330→   330→        if (response.status >= 400) {
+   331→   331→          this.log(`HTTP ${response.status} on attempt ${attempt}/${maxRetries} for ${url}`, 'warn');
+   332→   332→          if (attempt < maxRetries) {
+   333→   333→            await this.sleep(this.defaultDelay * Math.pow(2, attempt));
+   334→   334→            continue;
+   335→   335→          }
+   336→   336→          throw new Error(`HTTP ${response.status} after ${maxRetries} retries`);
+   337→   337→        }
+   338→   338→
+   339→   339→        return typeof response.data === 'string' ? response.data : String(response.data);
+   340→   340→      } catch (err: unknown) {
+   341→   341→        const isNetworkError =
+   342→   342→          err instanceof Error &&
+   343→   343→          ('code' in err
+   344→   344→            ? (err as NodeJS.ErrnoException).code === 'ECONNRESET' ||
+   345→   345→              (err as NodeJS.ErrnoException).code === 'ETIMEDOUT' ||
+   346→   346→              (err as NodeJS.ErrnoException).code === 'ECONNREFUSED' ||
+   347→   347→              (err as NodeJS.ErrnoException).code === 'ENOTFOUND'
+   348→   348→            : false);
+   349→   349→
+   350→   350→        if (isNetworkError && attempt < maxRetries) {
+   351→   351→          this.log(
+   352→   352→            `Network error (${(err as NodeJS.ErrnoException).code}) on attempt ${attempt}/${maxRetries} for ${url}`,
+   353→   353→            'warn',
+   354→   354→          );
+   355→   355→          await this.sleep(this.defaultDelay * Math.pow(2, attempt));
+   356→   356→          continue;
+   357→   357→        }
+   358→   358→
+   359→   359→        if (attempt < maxRetries) {
+   360→   360→          this.log(
+   361→   361→            `Error on attempt ${attempt}/${maxRetries} for ${url}: ${err instanceof Error ? err.message : String(err)}`,
+   362→   362→            'warn',
+   363→   363→          );
+   364→   364→          await this.sleep(this.defaultDelay * Math.pow(2, attempt));
+   365→   365→          continue;
+   366→   366→        }
+   367→   367→
+   368→   368→        throw err;
+   369→   369→      }
+   370→   370→    }
+   371→   371→
+   372→   372→    // Should never reach here, but TypeScript needs it
+   373→   373→    throw new Error(`Failed to fetch ${url} after ${maxRetries} retries`);
+   374→   374→  }
+   375→   375→
+   376→   376→  // ── robots.txt ─────────────────────────────────────────────────
+   377→   377→
+   378→   378→  /**
+   379→   379→   * Check robots.txt for the source's base URL.
+   380→   380→   * Returns true if we are allowed, false if explicitly disallowed.
+   381→   381→   * Defaults to true if robots.txt cannot be fetched.
+   382→   382→   */
+   383→   383→  async checkRobotsTxt(): Promise<boolean> {
+   384→   384→    try {
+   385→   385→      const robotsUrl = `${this.baseUrl.replace(/\/+$/, '')}/robots.txt`;
+   386→   386→      const response = await axios.get(robotsUrl, {
+   387→   387→        timeout: 10_000,
+   388→   388→        headers: { 'User-Agent': this.getUserAgent() },
+   389→   389→        validateStatus: () => true,
+   390→   390→      });
+   391→   391→
+   392→   392→      if (response.status !== 200) {
+   393→   393→        this.log(`Could not fetch robots.txt (${response.status}), assuming allowed`, 'warn');
+   394→   394→        return true;
+   395→   395→      }
+   396→   396→
+   397→   397→      const text: string = response.data;
+   398→   398→      const lines = text.split('\n').map((l) => l.trim().toLowerCase());
+   399→   399→
+   400→   400→      let isRelevantAgent = false;
+   401→   401→
+   402→   402→      for (const line of lines) {
+   403→   403→        if (line.startsWith('user-agent:')) {
+   404→   404→          const agent = line.split(':')[1]?.trim();
+   405→   405→          isRelevantAgent = agent === '*' || agent === 'AraciKiyasBot';
+   406→   406→        }
+   407→   407→
+   408→   408→        if (isRelevantAgent && line.startsWith('disallow:')) {
+   409→   409→          const path = line.split(':')[1]?.trim();
+   410→   410→          // If disallow is "/" (root), we are not allowed
+   411→   411→          if (path === '/' || path === '/*') {
+   412→   412→            this.log(`robots.txt disallows access to "${path}"`, 'warn');
+   413→   413→            return false;
+   414→   414→          }
+   415→   415→        }
+   416→   416→      }
+   417→   417→
+   418→   418→      return true;
+   419→   419→    } catch {
+   420→   420→      this.log('Failed to fetch robots.txt, assuming allowed', 'warn');
+   421→   421→      return true;
+   422→   422→    }
+   423→   423→  }
+   424→   424→
+   425→   425→  // ── Rate-limit handling ────────────────────────────────────────
+   426→   426→
+   427→   427→  /** Handle a rate-limit response by waiting before next attempt */
+   428→   428→  async handleRateLimit(_error: unknown): Promise<void> {
+   429→   429→    // Exponential back-off: base delay × 2^attempt (called after each failed attempt)
+   430→   430→    const waitMs = this.defaultDelay * 8 + Math.random() * this.defaultDelay * 4;
+   431→   431→    this.log(`Rate limit detected, waiting ${Math.round(waitMs)}ms`, 'warn');
+   432→   432→    await this.sleep(waitMs);
+   433→   433→  }
+   434→   434→
+   435→   435→  // ── Proxy support ──────────────────────────────────────────────
+   436→   436→
+   437→   437→  protected shouldUseProxy(): boolean {
+   438→   438→    return !!(process.env.PROXY_HOST && process.env.PROXY_PORT);
+   439→   439→  }
+   440→   440→
+   441→   441→  protected getProxy(): string | undefined {
+   442→   442→    if (!this.shouldUseProxy()) return undefined;
+   443→   443→    const host = process.env.PROXY_HOST!;
+   444→   444→    const port = process.env.PROXY_PORT!;
+   445→   445→    return `${host}:${port}`;
+   446→   446→  }
+   447→   447→
+   448→   448→  /** Build an axios-compatible proxy config object */
+   449→   449→  private getProxyConfig(): { host: string; port: number; auth?: { username: string; password: string } } {
+   450→   450→    const host = process.env.PROXY_HOST!;
+   451→   451→    const port = parseInt(process.env.PROXY_PORT!, 10);
+   452→   452→
+   453→   453→    const auth =
+   454→   454→      process.env.PROXY_USERNAME && process.env.PROXY_PASSWORD
+   455→   455→        ? { username: process.env.PROXY_USERNAME, password: process.env.PROXY_PASSWORD }
+   456→   456→        : process.env.PROXY_AUTH
+   457→   457→          ? (() => {
+   458→   458→              const decoded = Buffer.from(process.env.PROXY_AUTH!, 'base64').toString('utf-8');
+   459→   459→              const [username, password] = decoded.split(':');
+   460→   460→              return { username: username ?? '', password: password ?? '' };
+   461→   461→            })()
+   462→   462→          : undefined;
+   463→   463→
+   464→   464→    return { host, port, ...(auth ? { auth } : {}) };
+   465→   465→  }
+   466→   466→
+   467→   467→  // ── Logging ────────────────────────────────────────────────────
+   468→   468→
+   469→   469→  protected log(message: string, level: 'info' | 'warn' | 'error' = 'info'): void {
+   470→   470→    const prefix = `[${this.sourceName}]`;
+   471→   471→    switch (level) {
+   472→   472→      case 'error':
+   473→   473→        console.error(`${prefix} ${message}`);
+   474→   474→        break;
+   475→   475→      case 'warn':
+   476→   476→        console.warn(`${prefix} ${message}`);
+   477→   477→        break;
+   478→   478→      default:
+   479→   479→        console.log(`${prefix} ${message}`);
+   480→   480→    }
+   481→   481→  }
+   482→   482→
+   483→   483→  // ── Normalization helpers ──────────────────────────────────────
+   484→   484→
+   485→   485→  protected normalizeMake(value: string): string {
+   486→   486→    const lowered = value.trim().toLowerCase();
+   487→   487→    return MAKE_NORMALIZE[lowered] ?? this.titleCase(value);
+   488→   488→  }
+   489→   489→
+   490→   490→  protected normalizeModel(value: string): string {
+   491→   491→    const lowered = value.trim().toLowerCase();
+   492→   492→    return MODEL_NORMALIZE[lowered] ?? this.titleCase(value);
+   493→   493→  }
+   494→   494→
+   495→   495→  protected normalizeFuel(value: string): string {
+   496→   496→    const lowered = value.trim().toLowerCase();
+   497→   497→    return FUEL_NORMALIZE[lowered] ?? this.titleCase(value);
+   498→   498→  }
+   499→   499→
+   500→   500→  protected normalizeTransmission(value: string): string {
+   501→   501→    const lowered = value.trim().toLowerCase();
+   502→   502→    return TRANSMISSION_NORMALIZE[lowered] ?? this.titleCase(value);
+   503→   503→  }
+   504→   504→
+   505→   505→  protected normalizeBodyType(value: string): string {
+   506→   506→    const lowered = value.trim().toLowerCase();
+   507→   507→    return BODY_NORMALIZE[lowered] ?? this.titleCase(value);
+   508→   508→  }
+   509→   509→
+   510→   510→  protected normalizeSellerType(value: string): string {
+   511→   511→    const lowered = value.trim().toLowerCase();
+   512→   512→    return SELLER_NORMALIZE[lowered] ?? this.titleCase(value);
+   513→   513→  }
+   514→   514→
+   515→   515→  // ── Extraction helpers ─────────────────────────────────────────
+   516→   516→
+   517→   517→  /**
+   518→   518→   * Extract a numeric price from free-form Turkish text.
+   519→   519→   * Handles formats: "1.234.567", "1,234,567", "1234567", "1.234.567 TL"
+   520→   520→   */
+   521→   521→  protected extractPrice(text: string): number {
+   522→   522→    if (!text) return 0;
+   523→   523→
+   524→   524→    // Remove currency symbols and whitespace
+   525→   525→    let cleaned = text.replace(/[^\d.,]/g, '');
+   526→   526→
+   527→   527→    // Handle Turkish format: dots as thousands separator, optional comma for decimals
+   528→   528→    // e.g. "1.234.567" or "1.234.567,89"
+   529→   529→    if (cleaned.includes('.') && cleaned.includes(',')) {
+   530→   530→      // Dots are thousands, comma is decimal separator
+   531→   531→      cleaned = cleaned.replace(/\./g, '').replace(',', '.');
+   532→   532→    } else if (cleaned.includes('.')) {
+   533→   533→      // Could be thousands separator (1.234.567) or decimal (1234.56)
+   534→   534→      const parts = cleaned.split('.');
+   535→   535→      if (parts.length > 2 || (parts.length === 2 && parts[1].length === 3)) {
+   536→   536→        // Thousands separator
+   537→   537→        cleaned = cleaned.replace(/\./g, '');
+   538→   538→      }
+   539→   539→      // else: treat as decimal — keep as is
+   540→   540→    } else if (cleaned.includes(',')) {
+   541→   541→      // Could be thousands (1,234,567) or decimal (1234,56)
+   542→   542→      const parts = cleaned.split(',');
+   543→   543→      if (parts.length > 2) {
+   544→   544→        // Thousands separator
+   545→   545→        cleaned = cleaned.replace(/,/g, '');
+   546→   546→      } else if (parts.length === 2 && parts[1].length === 3) {
+   547→   547→        // Thousands separator with 3-digit groups
+   548→   548→        cleaned = cleaned.replace(/,/g, '');
+   549→   549→      } else {
+   550→   550→        // Decimal separator
+   551→   551→        cleaned = cleaned.replace(',', '.');
+   552→   552→      }
+   553→   553→    }
+   554→   554→
+   555→   555→    const num = parseInt(cleaned, 10);
+   556→   556→    return isNaN(num) ? 0 : num;
+   557→   557→  }
+   558→   558→
+   559→   559→  /**
+   560→   560→   * Extract a 4-digit year from text.
+   561→   561→   * Validates range 1990–2026.
+   562→   562→   */
+   563→   563→  protected extractYear(text: string): number {
+   564→   564→    if (!text) return 0;
+   565→   565→    const match = text.match(/\b(19[9]\d|20[0-2]\d)\b/);
+   566→   566→    if (!match) return 0;
+   567→   567→    const year = parseInt(match[1], 10);
+   568→   568→    return year >= 1990 && year <= 2026 ? year : 0;
+   569→   569→  }
+   570→   570→
+   571→   571→  /**
+   572→   572→   * Extract mileage in km from Turkish text.
+   573→   573→   * Handles: "125.000 km", "125000 km", "125.000 Km", "125.000 KM"
+   574→   574→   */
+   575→   575→  protected extractMileage(text: string): number {
+   576→   576→    if (!text) return 0;
+   577→   577→
+   578→   578→    // Remove km/Km/KM suffix and whitespace
+   579→   579→    let cleaned = text.replace(/\s*km\s*/i, '').trim();
+   580→   580→
+   581→   581→    // Use the same price-like parsing (Turkish number format)
+   582→   582→    if (cleaned.includes('.') && cleaned.includes(',')) {
+   583→   583→      cleaned = cleaned.replace(/\./g, '').replace(',', '.');
+   584→   584→    } else if (cleaned.includes('.')) {
+   585→   585→      const parts = cleaned.split('.');
+   586→   586→      if (parts.length > 2 || (parts.length === 2 && parts[1].length === 3)) {
+   587→   587→        cleaned = cleaned.replace(/\./g, '');
+   588→   588→      }
+   589→   589→    } else if (cleaned.includes(',')) {
+   590→   590→      const parts = cleaned.split(',');
+   591→   591→      if (parts.length > 2) {
+   592→   592→        cleaned = cleaned.replace(/,/g, '');
+   593→   593→      } else if (parts.length === 2 && parts[1].length === 3) {
+   594→   594→        cleaned = cleaned.replace(/,/g, '');
+   595→   595→      } else {
+   596→   596→        cleaned = cleaned.replace(',', '.');
+   597→   597→      }
+   598→   598→    }
+   599→   599→
+   600→   600→    // Remove any remaining non-digit chars
+   601→   601→    cleaned = cleaned.replace(/[^\d]/g, '');
+   602→   602→
+   603→   603→    const num = parseInt(cleaned, 10);
+   604→   604→    return isNaN(num) ? 0 : num;
+   605→   605→  }
+   606→   606→
+   607→   607→  // ── User-Agent rotation ────────────────────────────────────────
+   608→   608→
+   609→   609→  protected getUserAgent(): string {
+   610→   610→    return USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)];
+   611→   611→  }
+   612→   612→
+   613→   613→  // ── Private utilities ──────────────────────────────────────────
+   614→   614→
+   615→   615→  /** Title-case a string, preserving existing casing patterns */
+   616→   616→  private titleCase(value: string): string {
+   617→   617→    return value
+   618→   618→      .trim()
+   619→   619→      .split(/\s+/)
+   620→   620→      .map((word) => {
+   621→   621→        if (word.length === 0) return word;
+   622→   622→        // Preserve all-caps abbreviations like SUV, MPV, LPG
+   623→   623→        if (word === word.toUpperCase() && word.length <= 4) return word;
+   624→   624→        return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+   625→   625→      })
+   626→   626→      .join(' ');
+   627→   627→  }
+   628→   628→
+   629→   629→  /** Get or create the per-adapter rate limiter */
+   630→   630→  private getRateLimiter(): RateLimiter {
+   631→   631→    if (!this._rateLimiter) {
+   632→   632→      this._rateLimiter = getRateLimiter({
+   633→   633→        maxRequests: Math.max(1, this.maxConcurrency),
+   634→   634→        perSeconds: 10,
+   635→   635→        key: `adapter:${this.sourceName}`,
+   636→   636→      });
+   637→   637→    }
+   638→   638→    return this._rateLimiter;
+   639→   639→  }
+   640→   640→
+   641→   641→  /** Promisified sleep */
+   642→   642→  private sleep(ms: number): Promise<void> {
+   643→   643→    return new Promise((resolve) => setTimeout(resolve, ms));
+   644→   644→  }
+   645→   645→}
+   646→   646→
+   647→   647→// ═══════════════════════════════════════════════════════════════════
+   648→   648→// Mock Data Helpers (used by adapters for scrapeFallback)
+   649→   649→// ═══════════════════════════════════════════════════════════════════
+   650→   650→
+   651→   651→/** Pick a random element from an array */
+   652→   652→export function pick<T>(arr: readonly T[]): T {
+   653→   653→  return arr[Math.floor(Math.random() * arr.length)];
+   654→   654→}
+   655→   655→
+   656→   656→/** Pick a random element, with 30% chance of returning undefined (optional fields) */
+   657→   657→export function pickOptional<T>(arr: readonly T[]): T | undefined {
+   658→   658→  if (Math.random() < 0.3) return undefined;
+   659→   659→  return pick(arr);
+   660→   660→}
+   661→   661→
+   662→   662→/** Random integer in [min, max] inclusive */
+   663→   663→export function randInt(min: number, max: number): number {
+   664→   664→  return Math.floor(Math.random() * (max - min + 1)) + min;
+   665→   665→}
+   666→   666→
+   667→   667→/** Random float in [min, max), rounded to `decimals` places */
+   668→   668→export function randFloat(min: number, max: number, decimals = 0): number {
+   669→   669→  const val = Math.random() * (max - min) + min;
+   670→   670→  const factor = Math.pow(10, decimals);
+   671→   671→  return Math.round(val * factor) / factor;
+   672→   672→}
+   673→   673→
+   674→   674→/** Get models for a given make */
+   675→   675→export function getModelsForMake(make: string): string[] {
+   676→   676→  return MAKE_MODELS[make] ?? ['Bilinmiyor'];
+   677→   677→}
+   678→   678→
+   679→   679→/** Get a realistic district for a city */
+   680→   680→export function getDistrictForCity(city: string): string | undefined {
+   681→   681→  if (city === 'İstanbul') return pick(ISTANBUL_DISTRICTS);
+   682→   682→  if (city === 'Ankara') return pick(ANKARA_DISTRICTS);
+   683→   683→  if (city === 'İzmir') return pick(IZMIR_DISTRICTS);
+   684→   684→  return Math.random() < 0.4 ? 'Merkez' : undefined;
+   685→   685→}
+   686→   686→
+   687→   687→/** Generate a realistic fake listing URL for a given source */
+   688→   688→export function fakeListingUrl(
+   689→   689→  baseUrl: string,
+   690→   690→  make: string,
+   691→   691→  model: string,
+   692→   692→  year: number,
+   693→   693→): string {
+   694→   694→  const slug = `${make.toLowerCase().replace(/\s+/g, '-')}-${model.toLowerCase().replace(/\s+/g, '-')}-${year}`;
+   695→   695→  const id = randInt(1000000, 9999999);
+   696→   696→  return `${baseUrl}/ilan/vasita-araba-${slug}-${id}`;
+   697→   697→}
+   698→   698→
+   699→   699→/** Generate a realistic price adjusted by a multiplier for platform bias */
+   700→   700→export function generatePrice(baseMin: number, baseMax: number, multiplier = 1): number {
+   701→   701→  const raw = randInt(baseMin, baseMax);
+   702→   702→  const adjusted = Math.round(raw * multiplier);
+   703→   703→  // Round to nearest 1000
+   704→   704→  return Math.round(adjusted / 1000) * 1000;
+   705→   705→}
+   706→   706→
+   707→   707→/** Generate a realistic mileage for a given year */
+   708→   708→export function generateMileage(year: number): number | undefined {
+   709→   709→  const age = 2025 - year;
+   710→   710→  if (age <= 0) return Math.random() < 0.6 ? 0 : randInt(0, 5000);
+   711→   711→  const avgKmPerYear = randInt(10000, 25000);
+   712→   712→  const km = age * avgKmPerYear + randInt(-5000, 5000);
+   713→   713→  return Math.max(0, km);
+   714→   714→}
+   715→   715→
+   716→   716→/** Generate a list of mock listings with common logic */
+   717→   717→export function generateMockListings(opts: {
+   718→   718→  sourceName: string;
+   719→   719→  baseUrl: string;
+   720→   720→  count: number;
+   721→   721→  priceMultiplier?: number;
+   722→   722→  priceMin?: number;
+   723→   723→  priceMax?: number;
+   724→   724→  yearMin?: number;
+   725→   725→  yearMax?: number;
+   726→   726→  sellerTypes?: string[];
+   727→   727→  allowedMakes?: string[];
+   728→   728→  fuelBias?: string[];
+   729→   729→  bodyBias?: string[];
+   730→   730→  descriptionTemplate?: (make: string, model: string, year: number, city: string) => string;
+   731→   731→}): ListingRaw[] {
+   732→   732→  const {
+   733→   733→    sourceName,
+   734→   734→    baseUrl,
+   735→   735→    count,
+   736→   736→    priceMultiplier = 1,
+   737→   737→    priceMin = 500000,
+   738→   738→    priceMax = 8000000,
+   739→   739→    yearMin = 2010,
+   740→   740→    yearMax = 2025,
+   741→   741→    sellerTypes = SELLER_TYPES,
+   742→   742→    allowedMakes = TURKISH_MAKES,
+   743→   743→    fuelBias,
+   744→   744→    bodyBias,
+   745→   745→    descriptionTemplate,
+   746→   746→  } = opts;
+   747→   747→
+   748→   748→  const listings: ListingRaw[] = [];
+   749→   749→
+   750→   750→  for (let i = 0; i < count; i++) {
+   751→   751→    const make = pick(allowedMakes);
+   752→   752→    const models = getModelsForMake(make);
+   753→   753→    const model = pick(models);
+   754→   754→    const year = randInt(yearMin, yearMax);
+   755→   755→    const city = pick(TURKISH_CITIES);
+   756→   756→    const district = getDistrictForCity(city);
+   757→   757→    const mileage = Math.random() < 0.05 ? undefined : generateMileage(year);
+   758→   758→    const fuelType = fuelBias ? pick(fuelBias) : pickOptional(FUEL_TYPES);
+   759→   759→    const bodyType = bodyBias ? pick(bodyBias) : pickOptional(BODY_TYPES);
+   760→   760→    const price = generatePrice(priceMin, priceMax, priceMultiplier);
+   761→   761→
+   762→   762→    const listing: ListingRaw = {
+   763→   763→      sourceName,
+   764→   764→      sourceUrl: fakeListingUrl(baseUrl, make, model, year),
+   765→   765→      make,
+   766→   766→      model,
+   767→   767→      trim: Math.random() < 0.4 ? pick(models) : undefined,
+   768→   768→      year,
+   769→   769→      price,
+   770→   770→      currency: 'TRY',
+   771→   771→      mileageKm: mileage,
+   772→   772→      fuelType,
+   773→   773→      transmission: pickOptional(TRANSMISSIONS),
+   774→   774→      bodyType,
+   775→   775→      color: pickOptional(COLORS_TR),
+   776→   776→      city,
+   777→   777→      district,
+   778→   778→      sellerType: pick(sellerTypes),
+   779→   779→      imageUrl: `https://placehold.co/600x400?text=${encodeURIComponent(make)}+${encodeURIComponent(model)}`,
+   780→   780→      imageUrls: [
+   781→   781→        `https://placehold.co/600x400?text=${encodeURIComponent(make)}+${encodeURIComponent(model)}+1`,
+   782→   782→        `https://placehold.co/600x400?text=${encodeURIComponent(make)}+${encodeURIComponent(model)}+2`,
+   783→   783→        `https://placehold.co/600x400?text=${encodeURIComponent(make)}+${encodeURIComponent(model)}+3`,
+   784→   784→      ],
+   785→   785→      description: descriptionTemplate
+   786→   786→        ? descriptionTemplate(make, model, year, city)
+   787→   787→        : `${year} ${make} ${model}, ${city}'da satılık. Bakımları yapılmış, hasar kaydı yok.`,
+   788→   788→      isActive: true,
+   789→   789→    };
+   790→   790→
+   791→   791→    listings.push(listing);
+   792→   792→  }
+   793→   793→
+   794→   794→  return listings;
+   795→   795→}
+   796→   796→

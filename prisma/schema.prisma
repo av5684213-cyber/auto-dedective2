@@ -1,0 +1,109 @@
+// AracıKıyas - Türkiye İkinci El Araç Meta-Arama Platformu
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Listing {
+  id              String   @id @default(cuid())
+  sourceName      String   @map("source_name")
+  sourceUrl       String   @unique @map("source_url")
+  vin             String?  @map("vin")
+  make            String   @map("make")
+  model           String   @map("model")
+  trim            String?  @map("trim")
+  year            Int      @map("year")
+  price           Float    @map("price")
+  currency        String   @default("TRY") @map("currency")
+  mileageKm       Int?     @map("mileage_km")
+  fuelType        String?  @map("fuel_type")
+  transmission    String?  @map("transmission")
+  bodyType        String?  @map("body_type")
+  color           String?  @map("color")
+  city            String?  @map("city")
+  district        String?  @map("district")
+  sellerType      String?  @map("seller_type")
+  imageUrl        String?  @map("image_url")
+  imageUrls       String   @default("[]") @map("image_urls")
+  description     String?  @map("description")
+  firstSeenAt     DateTime @default(now()) @map("first_seen_at")
+  lastSeenAt      DateTime @default(now()) @map("last_seen_at")
+  isActive        Boolean  @default(true) @map("is_active")
+  isDeleted       Boolean  @default(false) @map("is_deleted")
+
+  // Değerleme ve Fırsat Analizi
+  estimatedValue       Float?   @map("estimated_value")
+  confidence           String?  @map("confidence") // "high", "medium", "low", "insufficient"
+  dealScore            Float?   @map("deal_score") // -1 ile 1 arası
+  dealTag              String?  @map("deal_tag") // "Harika Fırsat", "İyi Fiyat", "Piyasa Fiyatı", "Piyasa Üstü", "Pahalı", "Değerlendirilemedi"
+  comparableCount      Int      @default(0) @map("comparable_count")
+
+  // Sahip Olma Maliyeti
+  annualDepreciationPercent Float? @map("annual_depreciation_percent")
+  annualDepreciationAmount   Float? @map("annual_depreciation_amount")
+  ownershipCostAnnual        Float? @map("ownership_cost_annual")
+  fuelCostAnnual             Float? @map("fuel_cost_annual")
+  insuranceCostAnnual        Float? @map("insurance_cost_annual")
+  maintenanceCostAnnual      Float? @map("maintenance_cost_annual")
+  taxCostAnnual              Float? @map("tax_cost_annual")
+
+  // İlişkiler
+  priceHistory    PriceHistory[]
+  duplicateGroupId String? @map("duplicate_group_id")
+
+  @@index([sourceName])
+  @@index([make, model, year])
+  @@index([price])
+  @@index([dealTag])
+  @@index([dealScore])
+  @@index([isActive])
+  @@index([mileageKm])
+  @@index([year])
+  @@index([city])
+  @@index([fuelType])
+}
+
+model PriceHistory {
+  id         String   @id @default(cuid())
+  listingId  String   @map("listing_id")
+  price      Float    @map("price")
+  recordedAt DateTime @default(now()) @map("recorded_at")
+
+  listing    Listing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
+
+  @@index([listingId, recordedAt])
+}
+
+model DuplicateGroup {
+  id          String   @id @default(cuid())
+  listingIds  String   @default("[]") @map("listing_ids") // JSON array of listing IDs
+  primaryId   String?  @map("primary_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+}
+
+model ScrapeLog {
+  id          String    @id @default(cuid())
+  sourceName  String    @map("source_name")
+  startTime   DateTime  @default(now()) @map("start_time")
+  endTime     DateTime? @map("end_time")
+  status      String    @map("status") // "running", "success", "failed"
+  itemsFound  Int       @default(0) @map("items_found")
+  itemsSaved  Int       @default(0) @map("items_saved")
+  errorMsg    String?   @map("error_msg")
+  durationMs  Int?      @map("duration_ms")
+}
+
+model CacheStats {
+  id          String    @id @default(cuid())
+  key         String    @unique @map("key")
+  hitCount    Int       @default(0) @map("hit_count")
+  missCount   Int       @default(0) @map("miss_count")
+  lastHit     DateTime? @map("last_hit")
+  lastMiss    DateTime? @map("last_miss")
+}

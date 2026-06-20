@@ -1,0 +1,512 @@
+import { BaseAdapter, generateMockListings, type SearchFilters, type AdapterResult, type ListingRaw } from './base';
+import { RateLimiter, getRateLimiter } from '@/lib/utils/rate-limiter';
+import { TURKISH_MAKES, MAKE_MODELS } from '@/lib/constants';
+import * as cheerio from 'cheerio';
+
+// ═══════════════════════════════════════════════════════════════════
+// Avis Adapter — Rental fleet car sales (below market)
+// Real scraping with graceful fallback
+// ═══════════════════════════════════════════════════════════════════
+
+/** Fuel type mapping: Turkish name → Avis query param value */
+const FUEL_TYPE_PARAMS: Record<string, string> = {
+  'Benzin': 'Benzin',
+  'Dizel': 'Dizel',
+  'LPG': 'LPG',
+  'Elektrik': 'Elektrik',
+  'Hybrid': 'Hibrit',
+  'Benzin + LPG': 'Benzin_LPG',
+};
+
+/** Transmission mapping: Turkish name → Avis query param value */
+const TRANSMISSION_PARAMS: Record<string, string> = {
+  'Manuel': 'Manuel',
+  'Otomatik': 'Otomatik',
+  'Yarı Otomatik': 'YariOtomatik',
+};
+
+/** Known makes sorted by length (longest first) for greedy matching in titles */
+const MAKES_BY_LENGTH = [...TURKISH_MAKES].sort((a, b) => b.length - a.length);
+
+export class AvisAdapter extends BaseAdapter {
+  sourceName = 'avis';
+  baseUrl = 'https://www.avis.com.tr';
+  defaultDelay = 2500;
+  maxConcurrency = 2;
+
+  private rateLimiter: RateLimiter;
+
+  constructor() {
+    super();
+    this.rateLimiter = getRateLimiter({
+      maxRequests: 10,
+      perSeconds: 60, // 10 requests per minute
+      key: 'avis',
+    });
+  }
+
+  // ── Main search ──────────────────────────────────────────────────
+
+  async search(filters: SearchFilters): Promise<AdapterResult> {
+    const start = Date.now();
+
+    try {
+      const url = this.buildSearchUrl(filters);
+      this.log(`Searching: ${url}`);
+
+      // Respect rate limits
+      await this.rateLimiter.wait();
+
+      // Fetch the page HTML
+      const html = await this.fetchWithPoliteness(url);
+
+      // Parse listings from the HTML
+      const listings = this.parseSearchResults(html);
+
+      this.log(`Parsed ${listings.length} listings from search results`);
+
+      return {
+        success: true,
+        listings,
+        totalFound: listings.length,
+        durationMs: Date.now() - start,
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.log(`Search failed: ${message}`, 'error');
+
+      return {
+        success: false,
+        listings: [],
+        totalFound: 0,
+        error: message,
+        durationMs: Date.now() - start,
+      };
+    }
+  }
+
+  // ── Parse listing from raw scraped data ──────────────────────────
+
+  parseListing(raw: unknown): ListingRaw {
+    const data = raw as Record<string, unknown>;
+
+    const title = String(data.title ?? '');
+    const { make, model } = this.extractMakeModelFromTitle(title);
+
+    return {
+      id: data.id ? String(data.id) : undefined,
+      sourceName: this.sourceName,
+      sourceUrl: data.sourceUrl ? String(data.sourceUrl) : '',
+      make: this.normalizeMake(make || String(data.make ?? '')),
+      model: this.normalizeModel(model || String(data.model ?? '')),
+      trim: data.trim ? String(data.trim) : undefined,
+      year: this.extractYear(String(data.year ?? '')),
+      price: this.extractPrice(String(data.price ?? '')),
+      currency: 'TRY',
+      mileageKm: this.extractMileage(String(data.mileage ?? '')),
+      fuelType: data.fuelType ? this.normalizeFuel(String(data.fuelType)) : undefined,
+      transmission: data.transmission ? this.normalizeTransmission(String(data.transmission)) : undefined,
+      bodyType: data.bodyType ? this.normalizeBodyType(String(data.bodyType)) : undefined,
+      color: data.color ? String(data.color) : undefined,
+      city: data.city ? String(data.city) : undefined,
+      district: data.district ? String(data.district) : undefined,
+      sellerType: data.sellerType ? this.normalizeSellerType(String(data.sellerType)) : undefined,
+      imageUrl: data.imageUrl ? String(data.imageUrl) : undefined,
+      imageUrls: data.imageUrls ? (data.imageUrls as string[]) : undefined,
+      description: data.description ? String(data.description) : undefined,
+      isActive: true,
+    };
+  }
+
+  // ── Detail page scraping ─────────────────────────────────────────
+
+  async getDetail(listingId: string): Promise<ListingRaw | null> {
+    try {
+      const url = `${this.baseUrl}/ikinci-el-araba/${listingId}/detay`;
+      this.log(`Fetching detail: ${url}`);
+
+      await this.rateLimiter.wait();
+      const html = await this.fetchWithPoliteness(url);
+      const $ = cheerio.load(html);
+
+      // Title
+      const title = $('h1.vehicle-title, h1.detail-title, .car-name h1').first().text().trim();
+      const { make, model } = this.extractMakeModelFromTitle(title);
+
+      // Price
+      const priceText = $('.vehicle-price, .price-value, .detail-price').first().text().trim();
+
+      // Detail specification items
+      const details: Record<string, string> = {};
+      $('.vehicle-specs li, .detail-specs li, .spec-list li, .feature-list li').each((_, el) => {
+        const key = $(el).find('.spec-label, .label, dt').text().trim().toLowerCase();
+        const value = $(el).find('.spec-value, .value, dd').last().text().trim();
+        if (key && value) {
+          details[key] = value;
+        }
+      });
+
+      // Description
+      const description = $('.vehicle-description, .detail-description, #vehicleDescription').text().trim();
+
+      // Images
+      const imageUrls: string[] = [];
+      $('.vehicle-gallery img, .detail-photos img, .carousel img, .fleet-gallery img').each((_, el) => {
+        const src = $(el).attr('src') || $(el).attr('data-src') || $(el).attr('data-lazy-src');
+        if (src) imageUrls.push(src);
+      });
+
+      // Map detail keys to fields (Turkish → English)
+      const year = this.extractYear(details['yıl'] || details['model yılı'] || '');
+      const mileage = this.extractMileage(details['kilometre'] || '');
+      const fuelType = details['yakıt tipi'] || details['yakıt'] || '';
+      const transmission = details['vites'] || details['vites tipi'] || '';
+      const bodyType = details['kasa tipi'] || '';
+      const color = details['renk'] || '';
+      const city = details['il'] || details['şehir'] || '';
+      const district = details['ilçe'] || '';
+
+      const listing: ListingRaw = {
+        id: listingId,
+        sourceName: this.sourceName,
+        sourceUrl: `${this.baseUrl}/ikinci-el-araba/${listingId}`,
+        make: this.normalizeMake(make || details['marka'] || ''),
+        model: this.normalizeModel(model || details['model'] || ''),
+        trim: details['alt model'] || details['versiyon'] || undefined,
+        year: year || 0,
+        price: this.extractPrice(priceText),
+        currency: 'TRY',
+        mileageKm: mileage || undefined,
+        fuelType: fuelType ? this.normalizeFuel(fuelType) : undefined,
+        transmission: transmission ? this.normalizeTransmission(transmission) : undefined,
+        bodyType: bodyType ? this.normalizeBodyType(bodyType) : undefined,
+        color: color || undefined,
+        city: city || undefined,
+        district: district || undefined,
+        sellerType: 'Galeri',
+        imageUrl: imageUrls[0] || undefined,
+        imageUrls: imageUrls.length > 0 ? imageUrls : undefined,
+        description: description || undefined,
+        isActive: true,
+      };
+
+      return listing;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.log(`getDetail failed for ${listingId}: ${message}`, 'error');
+      return null;
+    }
+  }
+
+  // ── Fallback with mock data ──────────────────────────────────────
+
+  async scrapeFallback(): Promise<ListingRaw[]> {
+    this.log('Using mock fallback data');
+    return generateMockListings({
+      sourceName: this.sourceName,
+      baseUrl: this.baseUrl,
+      count: 30,
+      priceMultiplier: 0.90,
+      yearMin: 2014,
+      yearMax: 2024,
+      sellerTypes: ['Galeri', 'Galeri', 'Galeri'],
+      descriptionTemplate: (make, model, year, _city) =>
+        `${year} ${make} ${model} Avis filo satış, düzenli bakımlı, temiz araç.`,
+    });
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // Private helpers
+  // ═══════════════════════════════════════════════════════════════════
+
+  /**
+   * Build the Avis search URL from filter parameters.
+   * Maps our internal filter names to Avis's Turkish query parameter names.
+   */
+  private buildSearchUrl(filters: SearchFilters): string {
+    const params = new URLSearchParams();
+
+    // Base path for second-hand cars on Avis
+    let path = '/ikinci-el-araba';
+
+    // Make (marka) and model as path segments
+    if (filters.make) {
+      const makeSlug = this.slugify(filters.make);
+      path += `/${makeSlug}`;
+
+      if (filters.model) {
+        const modelSlug = this.slugify(filters.model);
+        path += `/${modelSlug}`;
+      }
+    }
+
+    // Year range
+    if (filters.yearMin) {
+      params.set('minYil', String(filters.yearMin));
+    }
+    if (filters.yearMax) {
+      params.set('maxYil', String(filters.yearMax));
+    }
+
+    // Price range
+    if (filters.priceMin) {
+      params.set('minFiyat', String(filters.priceMin));
+    }
+    if (filters.priceMax) {
+      params.set('maxFiyat', String(filters.priceMax));
+    }
+
+    // Fuel type
+    if (filters.fuelType) {
+      const fuelParam = FUEL_TYPE_PARAMS[filters.fuelType];
+      if (fuelParam) {
+        params.set('yakitTipi', fuelParam);
+      }
+    }
+
+    // Transmission
+    if (filters.transmission) {
+      const transParam = TRANSMISSION_PARAMS[filters.transmission];
+      if (transParam) {
+        params.set('vitesTipi', transParam);
+      }
+    }
+
+    // Pagination
+    const page = filters.page && filters.page > 0 ? filters.page : 1;
+    if (page > 1) {
+      params.set('sayfa', String(page));
+    }
+
+    const queryString = params.toString();
+    return `${this.baseUrl}${path}${queryString ? '?' + queryString : ''}`;
+  }
+
+  /**
+   * Parse search result HTML and extract listing cards.
+   * Tries multiple CSS selector strategies since site structure may change.
+   */
+  private parseSearchResults(html: string): ListingRaw[] {
+    const $ = cheerio.load(html);
+    const listings: ListingRaw[] = [];
+
+    // Try multiple selectors for listing cards
+    const cardSelectors = [
+      '.car-card',
+      '.vehicle-item',
+      '.listing-card',
+      '.fleet-vehicle',
+    ];
+
+    let cards: cheerio.Cheerio<cheerio.Element> | null = null;
+
+    for (const selector of cardSelectors) {
+      const found = $(selector);
+      if (found.length > 0) {
+        cards = found;
+        this.log(`Found ${found.length} cards using selector: ${selector}`);
+        break;
+      }
+    }
+
+    if (!cards || cards.length === 0) {
+      this.log('No listing cards found with any selector — page structure may have changed', 'warn');
+      return listings;
+    }
+
+    cards.each((_, el) => {
+      try {
+        const listing = this.extractListingFromCard($, el);
+        if (listing && listing.price > 0) {
+          listings.push(listing);
+        }
+      } catch (err) {
+        this.log(
+          `Failed to parse a card: ${err instanceof Error ? err.message : String(err)}`,
+          'warn',
+        );
+      }
+    });
+
+    return listings;
+  }
+
+  /**
+   * Extract a single ListingRaw from a cheerio card element.
+   * Uses multiple fallback selectors for each field.
+   */
+  private extractListingFromCard(
+    $: cheerio.CheerioAPI,
+    el: cheerio.Element,
+  ): ListingRaw | null {
+    const $el = $(el);
+
+    // ── Link & ID ────────────────────────────────────────────────
+    const linkEl = $el.find('a[href]').first();
+    const href = linkEl.attr('href') || '';
+    if (!href) return null;
+
+    const listingId = this.extractIdFromUrl(href);
+    const sourceUrl = href.startsWith('http') ? href : `${this.baseUrl}${href}`;
+
+    // ── Title ────────────────────────────────────────────────────
+    const title =
+      linkEl.attr('title') ||
+      linkEl.text().trim() ||
+      $el.find('.car-title, .vehicle-title, .listing-title, .fleet-title').first().text().trim();
+
+    // ── Price ────────────────────────────────────────────────────
+    const priceText =
+      $el.find('.price, .car-price, .vehicle-price, .listing-price, .fleet-price').first().text().trim();
+
+    // ── Year ─────────────────────────────────────────────────────
+    const yearText =
+      $el.find('.year, .model-year, .car-year, [data-year]').first().text().trim();
+
+    // ── Mileage ──────────────────────────────────────────────────
+    const kmText =
+      $el.find('.km, .mileage, .car-mileage, [data-km]').first().text().trim();
+
+    // ── Fuel type ────────────────────────────────────────────────
+    const fuelText =
+      $el.find('.fuel, .fuel-type, .car-fuel, [data-fuel]').first().text().trim();
+
+    // ── Transmission ─────────────────────────────────────────────
+    const transText =
+      $el.find('.transmission, .gear, .car-transmission, [data-transmission]').first().text().trim();
+
+    // ── City / Location ──────────────────────────────────────────
+    const cityText =
+      $el.find('.city, .location, .car-location, [data-city]').first().text().trim();
+
+    // ── Image ────────────────────────────────────────────────────
+    const imgEl = $el.find('img').first();
+    const imageUrl =
+      imgEl.attr('src') ||
+      imgEl.attr('data-src') ||
+      imgEl.attr('data-lazy-src') ||
+      imgEl.attr('data-original') ||
+      undefined;
+
+    // ── Build ListingRaw ─────────────────────────────────────────
+    const { make, model } = this.extractMakeModelFromTitle(title);
+    const year = this.extractYear(yearText) || this.extractYear(title);
+    const price = this.extractPrice(priceText);
+    const mileage = this.extractMileage(kmText);
+
+    // Avis is a fleet sales platform — all sellers are "Galeri"
+    const sellerHint = $el.find('.seller-type, .dealer-badge, .fleet-badge').first().text().trim();
+
+    let sellerType: string | undefined;
+    if (sellerHint) {
+      sellerType = this.normalizeSellerType(sellerHint);
+    } else {
+      // Avis listings are always from their fleet sales gallery
+      sellerType = 'Galeri';
+    }
+
+    const listing: ListingRaw = {
+      id: listingId || undefined,
+      sourceName: this.sourceName,
+      sourceUrl,
+      make: this.normalizeMake(make || ''),
+      model: this.normalizeModel(model || ''),
+      year: year || 0,
+      price,
+      currency: 'TRY',
+      mileageKm: mileage || undefined,
+      fuelType: fuelText ? this.normalizeFuel(fuelText) : undefined,
+      transmission: transText ? this.normalizeTransmission(transText) : undefined,
+      city: cityText || undefined,
+      sellerType,
+      imageUrl,
+      isActive: true,
+    };
+
+    return listing;
+  }
+
+  /**
+   * Extract the listing ID from an Avis URL.
+   * URLs typically contain a numeric ID, e.g. /ikinci-el-araba/.../12345
+   */
+  private extractIdFromUrl(url: string): string | undefined {
+    // Try numeric ID at the end of the path
+    const numericMatch = url.match(/\/(\d+)(?:\/|\?|$)/);
+    if (numericMatch) return numericMatch[1];
+
+    // Try slug-based ID pattern
+    const slugMatch = url.match(/\/([a-z0-9-]+-\d{4,})(?:\/|\?|$)/);
+    return slugMatch ? slugMatch[1] : undefined;
+  }
+
+  /**
+   * Extract make and model from a listing title string.
+   * Tries to match known Turkish makes against the title (case-insensitive).
+   * Uses greedy matching (longest make name first) to avoid partial matches.
+   */
+  private extractMakeModelFromTitle(title: string): { make: string; model: string } {
+    if (!title) return { make: '', model: '' };
+
+    const titleLower = title.toLowerCase();
+
+    // Try to find a known make in the title (longest match first)
+    for (const knownMake of MAKES_BY_LENGTH) {
+      const makeLower = knownMake.toLowerCase();
+
+      if (titleLower.includes(makeLower)) {
+        const makeIndex = titleLower.indexOf(makeLower);
+        const afterMake = title.substring(makeIndex + knownMake.length).trim();
+
+        let model = '';
+
+        if (afterMake) {
+          // Try to match a known model for this make
+          const knownModels = MAKE_MODELS[knownMake];
+          if (knownModels) {
+            const sortedModels = [...knownModels].sort((a, b) => b.length - a.length);
+            for (const knownModel of sortedModels) {
+              if (afterMake.toLowerCase().startsWith(knownModel.toLowerCase())) {
+                model = knownModel;
+                break;
+              }
+            }
+          }
+
+          // If no known model matched, take the first meaningful word(s)
+          if (!model) {
+            const words = afterMake.split(/\s+/).filter((w) => w.length > 0);
+            const nonYearWords = words.filter((w) => !/^\d{4}$/.test(w));
+            if (nonYearWords.length > 0) {
+              model = nonYearWords.slice(0, 2).join(' ');
+            }
+          }
+        }
+
+        return { make: knownMake, model };
+      }
+    }
+
+    // Fallback: first word is make, rest is model
+    const parts = title.split(/\s+/).filter((p) => p.length > 0 && !/^\d{4}$/.test(p));
+    const make = parts[0] || '';
+    const model = parts.slice(1, 3).join(' ') || '';
+
+    return { make, model };
+  }
+
+  /**
+   * Slugify a string for use in Avis URL paths.
+   * Lowercase, replace Turkish chars, replace spaces and special chars with hyphens.
+   */
+  private slugify(text: string): string {
+    return text
+      .toLowerCase()
+      .replace(/[çğıöşü]/g, (ch) => {
+        const map: Record<string, string> = { ç: 'c', ğ: 'g', ı: 'i', ö: 'o', ş: 's', ü: 'u' };
+        return map[ch] || ch;
+      })
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '');
+  }
+}

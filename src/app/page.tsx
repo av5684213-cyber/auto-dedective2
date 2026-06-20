@@ -1,0 +1,328 @@
+'use client'
+
+import { useState, useEffect, useCallback, useMemo } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
+import { Search, BarChart3, Car } from 'lucide-react'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { SearchBar } from '@/components/search-bar'
+import { FilterSidebar, FilterButton } from '@/components/filter-sidebar'
+import { ListingGrid } from '@/components/listing-grid'
+import { ListingDetail } from '@/components/listing-detail'
+import { StatsDashboard } from '@/components/stats-dashboard'
+import type { SearchFilters, SearchResult, ListingWithScore, SearchAggregations } from '@/lib/types'
+
+const DEFAULT_FILTERS: SearchFilters = {
+  sortBy: 'newest',
+  page: 1,
+  limit: 20,
+}
+
+function parseUrlFilters(): SearchFilters {
+  if (typeof window === 'undefined') return DEFAULT_FILTERS
+  const params = new URLSearchParams(window.location.search)
+  const filters: SearchFilters = { ...DEFAULT_FILTERS }
+  if (params.get('make')) filters.make = params.get('make')!
+  if (params.get('model')) filters.model = params.get('model')!
+  if (params.get('yearMin')) filters.yearMin = parseInt(params.get('yearMin')!)
+  if (params.get('yearMax')) filters.yearMax = parseInt(params.get('yearMax')!)
+  if (params.get('priceMin')) filters.priceMin = parseInt(params.get('priceMin')!)
+  if (params.get('priceMax')) filters.priceMax = parseInt(params.get('priceMax')!)
+  if (params.get('mileageMax')) filters.mileageMax = parseInt(params.get('mileageMax')!)
+  if (params.get('fuelType')) filters.fuelType = params.get('fuelType')!
+  if (params.get('transmission')) filters.transmission = params.get('transmission')!
+  if (params.get('bodyType')) filters.bodyType = params.get('bodyType')!
+  if (params.get('city')) filters.city = params.get('city')!
+  if (params.get('sellerType')) filters.sellerType = params.get('sellerType')!
+  if (params.get('dealTag')) filters.dealTag = params.get('dealTag')!
+  if (params.get('sortBy')) filters.sortBy = params.get('sortBy') as SearchFilters['sortBy']
+  if (params.get('page')) filters.page = parseInt(params.get('page')!)
+  if (params.get('tab')) { /* handled separately */ }
+  return filters
+}
+
+function updateUrl(filters: SearchFilters, tab: string) {
+  const params = new URLSearchParams()
+  if (filters.make) params.set('make', filters.make)
+  if (filters.model) params.set('model', filters.model)
+  if (filters.yearMin) params.set('yearMin', filters.yearMin.toString())
+  if (filters.yearMax) params.set('yearMax', filters.yearMax.toString())
+  if (filters.priceMin) params.set('priceMin', filters.priceMin.toString())
+  if (filters.priceMax) params.set('priceMax', filters.priceMax.toString())
+  if (filters.mileageMax) params.set('mileageMax', filters.mileageMax.toString())
+  if (filters.fuelType) params.set('fuelType', filters.fuelType)
+  if (filters.transmission) params.set('transmission', filters.transmission)
+  if (filters.bodyType) params.set('bodyType', filters.bodyType)
+  if (filters.city) params.set('city', filters.city)
+  if (filters.sellerType) params.set('sellerType', filters.sellerType)
+  if (filters.dealTag) params.set('dealTag', filters.dealTag)
+  if (filters.sortBy && filters.sortBy !== 'newest') params.set('sortBy', filters.sortBy)
+  if (filters.page && filters.page > 1) params.set('page', filters.page.toString())
+  if (tab !== 'search') params.set('tab', tab)
+  const qs = params.toString()
+  window.history.replaceState(null, '', qs ? `?${qs}` : '/')
+}
+
+export default function Home() {
+  const [activeTab, setActiveTab] = useState<'search' | 'dashboard'>('search')
+  const [filters, setFilters] = useState<SearchFilters>(DEFAULT_FILTERS)
+  const [results, setResults] = useState<SearchResult | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [aggregations, setAggregations] = useState<SearchAggregations | null>(null)
+  const [selectedListing, setSelectedListing] = useState<ListingWithScore | null>(null)
+  const [detailOpen, setDetailOpen] = useState(false)
+  const [filterDrawerOpen, setFilterDrawerOpen] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+
+  // Initialize from URL
+  useEffect(() => {
+    const urlFilters = parseUrlFilters()
+    const params = new URLSearchParams(window.location.search)
+    const tab = params.get('tab')
+    setFilters(urlFilters)
+    if (tab === 'dashboard') setActiveTab('dashboard')
+  }, [])
+
+  // Fetch listings
+  const fetchListings = useCallback(async (f: SearchFilters) => {
+    setLoading(true)
+    try {
+      const params = new URLSearchParams()
+      if (f.make) params.set('make', f.make)
+      if (f.model) params.set('model', f.model)
+      if (f.yearMin) params.set('yearMin', f.yearMin.toString())
+      if (f.yearMax) params.set('yearMax', f.yearMax.toString())
+      if (f.priceMin) params.set('priceMin', f.priceMin.toString())
+      if (f.priceMax) params.set('priceMax', f.priceMax.toString())
+      if (f.mileageMax) params.set('mileageMax', f.mileageMax.toString())
+      if (f.fuelType) params.set('fuelType', f.fuelType)
+      if (f.transmission) params.set('transmission', f.transmission)
+      if (f.bodyType) params.set('bodyType', f.bodyType)
+      if (f.city) params.set('city', f.city)
+      if (f.sellerType) params.set('sellerType', f.sellerType)
+      if (f.dealTag) params.set('dealTag', f.dealTag)
+      if (f.sortBy) params.set('sortBy', f.sortBy)
+      if (f.page) params.set('page', f.page.toString())
+      if (f.limit) params.set('limit', f.limit.toString())
+
+      const res = await fetch(`/api/listings?${params.toString()}`)
+      const data: SearchResult = await res.json()
+      setResults(data)
+      if (data.aggregations) {
+        setAggregations(data.aggregations)
+      }
+    } catch (err) {
+      console.error('Failed to fetch listings:', err)
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  // Fetch when filters change
+  useEffect(() => {
+    fetchListings(filters)
+    updateUrl(filters, activeTab)
+  }, [filters, fetchListings, activeTab])
+
+  // Handlers
+  const handleFilterChange = (newFilters: SearchFilters) => {
+    setFilters(newFilters)
+  }
+
+  const handleResetFilters = () => {
+    setFilters({ ...DEFAULT_FILTERS })
+    setSearchQuery('')
+  }
+
+  const handlePageChange = (page: number) => {
+    setFilters(prev => ({ ...prev, page }))
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  const handleSearch = (query: string) => {
+    setSearchQuery(query)
+    // Reset filters for a general search - the API doesn't support full-text search
+    // so we rely on the filter-based approach
+    if (!query) {
+      setFilters(prev => ({ ...prev, page: 1 }))
+    }
+  }
+
+  const handleMakeSelect = (make: string) => {
+    setFilters(prev => ({
+      ...prev,
+      make,
+      model: undefined,
+      page: 1,
+    }))
+  }
+
+  const handleModelSelect = (make: string, model: string) => {
+    setFilters(prev => ({
+      ...prev,
+      make,
+      model,
+      page: 1,
+    }))
+  }
+
+  const handleListingClick = (listing: ListingWithScore) => {
+    setSelectedListing(listing)
+    setDetailOpen(true)
+  }
+
+  const handleDetailClose = () => {
+    setDetailOpen(false)
+  }
+
+  const handleComparableClick = (listing: ListingWithScore) => {
+    setSelectedListing(listing)
+    // Re-fetch detail for the new listing
+    setDetailOpen(true)
+  }
+
+  const activeFilterCount = useMemo(() => {
+    let count = 0
+    if (filters.make) count++
+    if (filters.model) count++
+    if (filters.yearMin) count++
+    if (filters.yearMax) count++
+    if (filters.priceMin) count++
+    if (filters.priceMax) count++
+    if (filters.mileageMax) count++
+    if (filters.fuelType) count++
+    if (filters.transmission) count++
+    if (filters.bodyType) count++
+    if (filters.city) count++
+    if (filters.sellerType) count++
+    if (filters.dealTag) count++
+    if (filters.sortBy && filters.sortBy !== 'newest') count++
+    return count
+  }, [filters])
+
+  return (
+    <div className="min-h-screen flex flex-col bg-background">
+      {/* Sticky Header */}
+      <header className="sticky top-0 z-40 bg-white/80 backdrop-blur-lg border-b">
+        <div className="max-w-7xl mx-auto px-4 h-14 flex items-center justify-between">
+          {/* Logo */}
+          <div className="flex items-center gap-2">
+            <Car className="h-6 w-6 text-teal-600" />
+            <span className="text-lg font-extrabold">
+              <span className="text-teal-600">Aracı</span>
+              <span className="text-amber-500">Kıyas</span>
+            </span>
+          </div>
+
+          {/* Navigation Tabs */}
+          <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'search' | 'dashboard')}>
+            <TabsList className="bg-muted/50">
+              <TabsTrigger value="search" className="gap-1.5 text-xs sm:text-sm data-[state=active]:bg-teal-600 data-[state=active]:text-white">
+                <Search className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Ara</span>
+              </TabsTrigger>
+              <TabsTrigger value="dashboard" className="gap-1.5 text-xs sm:text-sm data-[state=active]:bg-teal-600 data-[state=active]:text-white">
+                <BarChart3 className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Paneller</span>
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+        </div>
+      </header>
+
+      {/* Main Content */}
+      <main className="flex-1">
+        <AnimatePresence mode="wait">
+          {activeTab === 'search' ? (
+            <motion.div
+              key="search"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+            >
+              {/* Search Bar Section */}
+              <div className="bg-gradient-to-b from-teal-50/80 to-white border-b px-4 py-6 sm:py-8">
+                <SearchBar
+                  onSearch={handleSearch}
+                  onMakeSelect={handleMakeSelect}
+                  onModelSelect={handleModelSelect}
+                  currentQuery={searchQuery}
+                />
+              </div>
+
+              {/* Content Area: Sidebar + Grid */}
+              <div className="max-w-7xl mx-auto flex">
+                <FilterSidebar
+                  filters={filters}
+                  aggregations={aggregations}
+                  onFilterChange={handleFilterChange}
+                  onReset={handleResetFilters}
+                  isOpen={filterDrawerOpen}
+                  onOpenChange={setFilterDrawerOpen}
+                  totalResults={results?.total || 0}
+                />
+
+                <div className="flex-1 min-w-0 p-4">
+                  {/* Mobile filter button + Results header */}
+                  <div className="flex items-center justify-between mb-4 lg:hidden">
+                    <FilterButton
+                      onClick={() => setFilterDrawerOpen(true)}
+                      activeCount={activeFilterCount}
+                    />
+                    {results && (
+                      <span className="text-sm text-muted-foreground">
+                        {results.total.toLocaleString('tr-TR')} ilan
+                      </span>
+                    )}
+                  </div>
+
+                  <ListingGrid
+                    listings={results?.listings || []}
+                    loading={loading}
+                    page={filters.page || 1}
+                    totalPages={results?.totalPages || 0}
+                    total={results?.total || 0}
+                    onPageChange={handlePageChange}
+                    onListingClick={handleListingClick}
+                  />
+                </div>
+              </div>
+            </motion.div>
+          ) : (
+            <motion.div
+              key="dashboard"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+            >
+              <StatsDashboard />
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </main>
+
+      {/* Footer */}
+      <footer className="mt-auto border-t bg-muted/30 py-4">
+        <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-muted-foreground">
+          <div className="flex items-center gap-1.5">
+            <Car className="h-3.5 w-3.5 text-teal-600" />
+            <span className="font-semibold text-teal-700">AracıKıyas</span>
+            <span>© {new Date().getFullYear()}</span>
+          </div>
+          <p>
+            Türkiye&apos;nin İkinci El Araç Meta-Arama Platformu — Tüm platformları tek aramada karşılaştırın
+          </p>
+        </div>
+      </footer>
+
+      {/* Listing Detail Modal */}
+      <ListingDetail
+        listing={selectedListing}
+        open={detailOpen}
+        onClose={handleDetailClose}
+        onComparableClick={handleComparableClick}
+      />
+    </div>
+  )
+}

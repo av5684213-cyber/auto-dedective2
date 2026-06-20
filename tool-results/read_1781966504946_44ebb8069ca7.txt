@@ -1,0 +1,797 @@
+     1→     1→// AracıKıyas - Cost Estimator Engine
+     2→     2→// Calculates total cost of ownership for Turkish second-hand car market
+     3→     3→
+     4→     4→import { db } from '@/lib/db';
+     5→     5→
+     6→     6→// ── Types ──────────────────────────────────────────────────────────────
+     7→     7→
+     8→     8→export interface CostEstimate {
+     9→     9→  annualDepreciationPercent: number;
+    10→    10→  annualDepreciationAmount: number;
+    11→    11→  ownershipCostAnnual: number;
+    12→    12→  fuelCostAnnual: number;
+    13→    13→  insuranceCostAnnual: number;
+    14→    14→  maintenanceCostAnnual: number;
+    15→    15→  taxCostAnnual: number;
+    16→    16→}
+    17→    17→
+    18→    18→interface ListingInput {
+    19→    19→  make: string;
+    20→    20→  model: string;
+    21→    21→  year: number;
+    22→    22→  price: number;
+    23→    23→  mileageKm: number | null;
+    24→    24→  fuelType: string | null;
+    25→    25→}
+    26→    26→
+    27→    27→// ── Constants ──────────────────────────────────────────────────────────
+    28→    28→
+    29→    29→/** Average annual driving distance in Turkey (km) */
+    30→    30→const ANNUAL_MILEAGE_KM = 15000;
+    31→    31→
+    32→    32→/** Current fuel prices in Turkey (TRY/L) — 2024/2025 averages */
+    33→    33→const FUEL_PRICES: Record<string, number> = {
+    34→    34→  Benzin: 45, // TRY/L
+    35→    35→  Dizel: 42, // TRY/L
+    36→    36→  LPG: 20, // TRY/L
+    37→    37→  Hybrid: 45, // Uses benzin pricing as base
+    38→    38→  Elektrik: 2.5, // TRY/kWh
+    39→    39→};
+    40→    40→
+    41→    41→/** Average fuel consumption by type (L/100km or kWh/100km for electric) */
+    42→    42→const FUEL_CONSUMPTION: Record<string, number> = {
+    43→    43→  Benzin: 6, // L/100km
+    44→    44→  Dizel: 5, // L/100km
+    45→    45→  LPG: 8, // L/100km (higher consumption but cheaper fuel)
+    46→    46→  Hybrid: 4, // L/100km
+    47→    47→  Elektrik: 15, // kWh/100km
+    48→    48→};
+    49→    49→
+    50→    50→/** Luxury brands with higher depreciation and costs */
+    51→    51→const LUXURY_BRANDS = [
+    52→    52→  'BMW', 'Mercedes-Benz', 'Audi', 'Porsche', 'Land Rover',
+    53→    53→  'Range Rover', 'Jaguar', 'Lexus', 'Infiniti', 'Volvo',
+    54→    54→  'Mini', 'Alfa Romeo', 'Maserati', 'Bentley', 'Rolls-Royce',
+    55→    55→];
+    56→    56→
+    57→    57→/** Popular brands with lower depreciation (reliable, high demand in Turkey) */
+    58→    58→const POPULAR_BRANDS = [
+    59→    59→  'Toyota', 'Honda', 'Hyundai', 'Dacia',
+    60→    60→];
+    61→    61→
+    62→    62→/** Engine displacement assumptions by make/model (cc) */
+    63→    63→const DEFAULT_ENGINE_CC = 1600; // Most common in Turkey
+    64→    64→
+    65→    65→/** Age-based consumption increase factors */
+    66→    66→const AGE_CONSUMPTION_INCREASE: Record<string, number> = {
+    67→    67→  new: 1.0, // 0-3 years: no increase
+    68→    68→  mid: 1.1, // 4-7 years: +10%
+    69→    69→  older: 1.15, // 8-10 years: +15%
+    70→    70→  veryOld: 1.2, // 11+ years: +20%
+    71→    71→};
+    72→    72→
+    73→    73→// ── Main Public Functions ──────────────────────────────────────────────
+    74→    74→
+    75→    75→/**
+    76→    76→ * Estimate total cost of ownership for a single listing.
+    77→    77→ * All costs are annual and in TRY.
+    78→    78→ *
+    79→    79→ * @param listing - Listing data with make, model, year, price, mileageKm, fuelType
+    80→    80→ * @returns CostEstimate with all annual cost components
+    81→    81→ */
+    82→    82→export function estimateCosts(listing: ListingInput): CostEstimate {
+    83→    83→  const currentYear = new Date().getFullYear();
+    84→    84→  const vehicleAge = currentYear - listing.year;
+    85→    85→
+    86→    86→  const isLuxury = LUXURY_BRANDS.some(
+    87→    87→    (b) => listing.make.toLowerCase() === b.toLowerCase(),
+    88→    88→  );
+    89→    89→  const isPopular = POPULAR_BRANDS.some(
+    90→    90→    (b) => listing.make.toLowerCase() === b.toLowerCase(),
+    91→    91→  );
+    92→    92→
+    93→    93→  // ── Depreciation ──
+    94→    94→  const annualDepreciationPercent = calculateDepreciationPercent(vehicleAge, isLuxury, isPopular);
+    95→    95→  const annualDepreciationAmount = listing.price * (annualDepreciationPercent / 100);
+    96→    96→
+    97→    97→  // ── Fuel Cost ──
+    98→    98→  const fuelCostAnnual = calculateFuelCost(listing.fuelType, vehicleAge);
+    99→    99→
+   100→   100→  // ── Insurance Cost ──
+   101→   101→  const insuranceCostAnnual = calculateInsuranceCost(
+   102→   102→    listing.price,
+   103→   103→    vehicleAge,
+   104→   104→    isLuxury,
+   105→   105→  );
+   106→   106→
+   107→   107→  // ── Maintenance Cost ──
+   108→   108→  const maintenanceCostAnnual = calculateMaintenanceCost(
+   109→   109→    vehicleAge,
+   110→   110→    isLuxury,
+   111→   111→    listing.mileageKm,
+   112→   112→  );
+   113→   113→
+   114→   114→  // ── Tax (MTV) Cost ──
+   115→   115→  const taxCostAnnual = calculateTaxCost(
+   116→   116→    listing.make,
+   117→   117→    listing.model,
+   118→   118→    vehicleAge,
+   119→   119→    listing.fuelType,
+   120→   120→  );
+   121→   121→
+   122→   122→  // ── Total Annual Ownership Cost ──
+   123→   123→  const ownershipCostAnnual =
+   124→   124→    annualDepreciationAmount +
+   125→   125→    fuelCostAnnual +
+   126→   126→    insuranceCostAnnual +
+   127→   127→    maintenanceCostAnnual +
+   128→   128→    taxCostAnnual;
+   129→   129→
+   130→   130→  return {
+   131→   131→    annualDepreciationPercent,
+   132→   132→    annualDepreciationAmount,
+   133→   133→    ownershipCostAnnual,
+   134→   134→    fuelCostAnnual,
+   135→   135→    insuranceCostAnnual,
+   136→   136→    maintenanceCostAnnual,
+   137→   137→    taxCostAnnual,
+   138→   138→  };
+   139→   139→}
+   140→   140→
+   141→   141→/**
+   142→   142→ * Estimate and persist costs for all listings that don't have cost data yet.
+   143→   143→ *
+   144→   144→ * @returns Counts of estimated and skipped listings
+   145→   145→ */
+   146→   146→export async function estimateAllCosts(): Promise<{
+   147→   147→  estimated: number;
+   148→   148→  skipped: number;
+   149→   149→}> {
+   150→   150→  const listings = await db.listing.findMany({
+   151→   151→    where: {
+   152→   152→      isActive: true,
+   153→   153→      isDeleted: false,
+   154→   154→      ownershipCostAnnual: null,
+   155→   155→    },
+   156→   156→    select: {
+   157→   157→      id: true,
+   158→   158→      make: true,
+   159→   159→      model: true,
+   160→   160→      year: true,
+   161→   161→      price: true,
+   162→   162→      mileageKm: true,
+   163→   163→      fuelType: true,
+   164→   164→    },
+   165→   165→  });
+   166→   166→
+   167→   167→  let estimated = 0;
+   168→   168→  let skipped = 0;
+   169→   169→
+   170→   170→  for (const listing of listings) {
+   171→   171→    try {
+   172→   172→      const costs = estimateCosts({
+   173→   173→        make: listing.make,
+   174→   174→        model: listing.model,
+   175→   175→        year: listing.year,
+   176→   176→        price: listing.price,
+   177→   177→        mileageKm: listing.mileageKm,
+   178→   178→        fuelType: listing.fuelType,
+   179→   179→      });
+   180→   180→
+   181→   181→      await db.listing.update({
+   182→   182→        where: { id: listing.id },
+   183→   183→        data: {
+   184→   184→          annualDepreciationPercent: costs.annualDepreciationPercent,
+   185→   185→          annualDepreciationAmount: costs.annualDepreciationAmount,
+   186→   186→          ownershipCostAnnual: costs.ownershipCostAnnual,
+   187→   187→          fuelCostAnnual: costs.fuelCostAnnual,
+   188→   188→          insuranceCostAnnual: costs.insuranceCostAnnual,
+   189→   189→          maintenanceCostAnnual: costs.maintenanceCostAnnual,
+   190→   190→          taxCostAnnual: costs.taxCostAnnual,
+   191→   191→        },
+   192→   192→      });
+   193→   193→
+   194→   194→      estimated++;
+   195→   195→    } catch {
+   196→   196→      skipped++;
+   197→   197→    }
+   198→   198→  }
+   199→   199→
+   200→   200→  return { estimated, skipped };
+   201→   201→}
+   202→   202→
+   203→   203→/**
+   204→   204→ * Re-estimate costs for all listings (including those with existing cost data).
+   205→   205→ * Useful for periodic refresh when fuel prices or tax rates change.
+   206→   206→ *
+   207→   207→ * @returns Counts of estimated and skipped listings
+   208→   208→ */
+   209→   209→export async function reestimateAllCosts(): Promise<{
+   210→   210→  estimated: number;
+   211→   211→  skipped: number;
+   212→   212→}> {
+   213→   213→  const listings = await db.listing.findMany({
+   214→   214→    where: {
+   215→   215→      isActive: true,
+   216→   216→      isDeleted: false,
+   217→   217→    },
+   218→   218→    select: {
+   219→   219→      id: true,
+   220→   220→      make: true,
+   221→   221→      model: true,
+   222→   222→      year: true,
+   223→   223→      price: true,
+   224→   224→      mileageKm: true,
+   225→   225→      fuelType: true,
+   226→   226→    },
+   227→   227→  });
+   228→   228→
+   229→   229→  let estimated = 0;
+   230→   230→  let skipped = 0;
+   231→   231→
+   232→   232→  for (const listing of listings) {
+   233→   233→    try {
+   234→   234→      const costs = estimateCosts({
+   235→   235→        make: listing.make,
+   236→   236→        model: listing.model,
+   237→   237→        year: listing.year,
+   238→   238→        price: listing.price,
+   239→   239→        mileageKm: listing.mileageKm,
+   240→   240→        fuelType: listing.fuelType,
+   241→   241→      });
+   242→   242→
+   243→   243→      await db.listing.update({
+   244→   244→        where: { id: listing.id },
+   245→   245→        data: {
+   246→   246→          annualDepreciationPercent: costs.annualDepreciationPercent,
+   247→   247→          annualDepreciationAmount: costs.annualDepreciationAmount,
+   248→   248→          ownershipCostAnnual: costs.ownershipCostAnnual,
+   249→   249→          fuelCostAnnual: costs.fuelCostAnnual,
+   250→   250→          insuranceCostAnnual: costs.insuranceCostAnnual,
+   251→   251→          maintenanceCostAnnual: costs.maintenanceCostAnnual,
+   252→   252→          taxCostAnnual: costs.taxCostAnnual,
+   253→   253→        },
+   254→   254→      });
+   255→   255→
+   256→   256→      estimated++;
+   257→   257→    } catch {
+   258→   258→      skipped++;
+   259→   259→    }
+   260→   260→  }
+   261→   261→
+   262→   262→  return { estimated, skipped };
+   263→   263→}
+   264→   264→
+   265→   265→// ── Internal: Depreciation Calculation ─────────────────────────────────
+   266→   266→
+   267→   267→/**
+   268→   268→ * Calculate annual depreciation percentage based on vehicle age and brand.
+   269→   269→ *
+   270→   270→ * Age brackets:
+   271→   271→ *   0-2 years:  15-20% annual depreciation
+   272→   272→ *   3-5 years:  10-15% annual depreciation
+   273→   273→ *   6-10 years: 8-12% annual depreciation
+   274→   274→ *   10+ years:  5-8% annual depreciation
+   275→   275→ *
+   276→   276→ * Brand adjustments:
+   277→   277→ *   Luxury:  +3%
+   278→   278→ *   Popular: -2%
+   279→   279→ *
+   280→   280→ * @param vehicleAge - Age of vehicle in years
+   281→   281→ * @param isLuxury - Whether the brand is a luxury brand
+   282→   282→ * @param isPopular - Whether the brand is a popular/reliable brand
+   283→   283→ * @returns Annual depreciation percentage
+   284→   284→ */
+   285→   285→function calculateDepreciationPercent(
+   286→   286→  vehicleAge: number,
+   287→   287→  isLuxury: boolean,
+   288→   288→  isPopular: boolean,
+   289→   289→): number {
+   290→   290→  let basePercent: number;
+   291→   291→
+   292→   292→  if (vehicleAge <= 2) {
+   293→   293→    // New cars: 15-20%. Use 17.5 as base, scale with age within bracket
+   294→   294→    basePercent = 20 - (vehicleAge / 2) * 5; // 20 at age 0, 17.5 at age 2
+   295→   295→  } else if (vehicleAge <= 5) {
+   296→   296→    // Mid-age: 10-15%
+   297→   297→    basePercent = 15 - ((vehicleAge - 2) / 3) * 5; // 15 at age 3, 11.67 at age 5
+   298→   298→  } else if (vehicleAge <= 10) {
+   299→   299→    // Older: 8-12%
+   300→   300→    basePercent = 12 - ((vehicleAge - 5) / 5) * 4; // 12 at age 6, 8.8 at age 10
+   301→   301→  } else {
+   302→   302→    // Very old: 5-8%
+   303→   303→    basePercent = Math.max(5, 8 - (vehicleAge - 10) * 0.3); // Gradually decreasing
+   304→   304→  }
+   305→   305→
+   306→   306→  // Brand adjustments
+   307→   307→  if (isLuxury) basePercent += 3;
+   308→   308→  if (isPopular) basePercent -= 2;
+   309→   309→
+   310→   310→  // Ensure reasonable bounds
+   311→   311→  return Math.max(3, Math.min(25, basePercent));
+   312→   312→}
+   313→   313→
+   314→   314→// ── Internal: Fuel Cost Calculation ────────────────────────────────────
+   315→   315→
+   316→   316→/**
+   317→   317→ * Calculate annual fuel cost based on fuel type and vehicle age.
+   318→   318→ *
+   319→   319→ * Base costs (15,000 km/year):
+   320→   320→ *   Benzin:  6L/100km × 45 TRY/L = ~40,500 TRY/year
+   321→   321→ *   Dizel:   5L/100km × 42 TRY/L = ~31,500 TRY/year
+   322→   322→ *   LPG:     8L/100km × 20 TRY/L = ~24,000 TRY/year
+   323→   323→ *   Hybrid:  4L/100km × 45 TRY/L = ~27,000 TRY/year
+   324→   324→ *   Elektrik: 15kWh/100km × 2.5 TRY/kWh = ~5,625 TRY/year
+   325→   325→ *
+   326→   326→ * Age adjustment: older vehicles consume 10-20% more fuel.
+   327→   327→ * Also handles "Benzin + LPG" as dual-fuel (weighted average).
+   328→   328→ *
+   329→   329→ * @param fuelType - Fuel type string (Benzin, Dizel, LPG, Hybrid, Elektrik, etc.)
+   330→   330→ * @param vehicleAge - Age of vehicle in years
+   331→   331→ * @returns Annual fuel cost in TRY
+   332→   332→ */
+   333→   333→function calculateFuelCost(fuelType: string | null, vehicleAge: number): number {
+   334→   334→  // Determine the age-based consumption increase factor
+   335→   335→  let ageFactor: number;
+   336→   336→  if (vehicleAge <= 3) {
+   337→   337→    ageFactor = AGE_CONSUMPTION_INCREASE.new;
+   338→   338→  } else if (vehicleAge <= 7) {
+   339→   339→    ageFactor = AGE_CONSUMPTION_INCREASE.mid;
+   340→   340→  } else if (vehicleAge <= 10) {
+   341→   341→    ageFactor = AGE_CONSUMPTION_INCREASE.older;
+   342→   342→  } else {
+   343→   343→    ageFactor = AGE_CONSUMPTION_INCREASE.veryOld;
+   344→   344→  }
+   345→   345→
+   346→   346→  // Handle dual-fuel "Benzin + LPG" — assume 60% LPG usage, 40% Benzin
+   347→   347→  if (fuelType && fuelType.toLowerCase().includes('lpg') && fuelType.toLowerCase().includes('benzin')) {
+   348→   348→    const benzinCost = calculateSingleFuelCost('Benzin', ageFactor);
+   349→   349→    const lpgCost = calculateSingleFuelCost('LPG', ageFactor);
+   350→   350→    // Weighted: 60% LPG usage (cheaper), 40% Benzin usage
+   351→   351→    return benzinCost * 0.4 + lpgCost * 0.6;
+   352→   352→  }
+   353→   353→
+   354→   354→  // Normalize fuel type string
+   355→   355→  const normalizedFuel = normalizeFuelType(fuelType);
+   356→   356→  return calculateSingleFuelCost(normalizedFuel, ageFactor);
+   357→   357→}
+   358→   358→
+   359→   359→/**
+   360→   360→ * Calculate annual fuel cost for a single fuel type.
+   361→   361→ *
+   362→   362→ * @param fuelType - Normalized fuel type
+   363→   363→ * @param ageFactor - Age-based consumption increase factor
+   364→   364→ * @returns Annual fuel cost in TRY
+   365→   365→ */
+   366→   366→function calculateSingleFuelCost(fuelType: string, ageFactor: number): number {
+   367→   367→  const consumption = FUEL_CONSUMPTION[fuelType] ?? FUEL_CONSUMPTION.Benzin;
+   368→   368→  const adjustedConsumption = consumption * ageFactor;
+   369→   369→
+   370→   370→  if (fuelType === 'Elektrik') {
+   371→   371→    // Electric: consumption in kWh/100km, price in TRY/kWh
+   372→   372→    const pricePerUnit = FUEL_PRICES.Elektrik;
+   373→   373→    const annualKwh = (adjustedConsumption / 100) * ANNUAL_MILEAGE_KM;
+   374→   374→    return annualKwh * pricePerUnit;
+   375→   375→  }
+   376→   376→
+   377→   377→  // ICE/LPG/Hybrid: consumption in L/100km, price in TRY/L
+   378→   378→  const pricePerLiter = FUEL_PRICES[fuelType] ?? FUEL_PRICES.Benzin;
+   379→   379→  const annualLiters = (adjustedConsumption / 100) * ANNUAL_MILEAGE_KM;
+   380→   380→  return annualLiters * pricePerLiter;
+   381→   381→}
+   382→   382→
+   383→   383→/**
+   384→   384→ * Normalize fuel type string to a known type.
+   385→   385→ */
+   386→   386→function normalizeFuelType(fuelType: string | null): string {
+   387→   387→  if (!fuelType) return 'Benzin'; // Default assumption
+   388→   388→
+   389→   389→  const lower = fuelType.toLowerCase().trim();
+   390→   390→
+   391→   391→  if (lower.includes('dizel') || lower.includes('diesel')) return 'Dizel';
+   392→   392→  if (lower.includes('elektrik') || lower.includes('electric')) return 'Elektrik';
+   393→   393→  if (lower.includes('hybrid') || lower.includes('hibrit')) return 'Hybrid';
+   394→   394→  if (lower.includes('lpg') || lower.includes('otogaz')) return 'LPG';
+   395→   395→  if (lower.includes('benzin') || lower.includes('gasoline') || lower.includes('petrol')) return 'Benzin';
+   396→   396→
+   397→   397→  return 'Benzin'; // Default fallback
+   398→   398→}
+   399→   399→
+   400→   400→// ── Internal: Insurance Cost Calculation ───────────────────────────────
+   401→   401→
+   402→   402→/**
+   403→   403→ * Calculate annual insurance cost (Kasko + Trafik Sigortası).
+   404→   404→ *
+   405→   405→ * Rules:
+   406→   406→ *   Base: 3-5% of vehicle value
+   407→   407→ *   New cars (0-2 years): 4-5%
+   408→   408→ *   Mid-age (3-5 years): 3-4%
+   409→   409→ *   Older (6+ years): 2.5-3%
+   410→   410→ *   Luxury: +1%
+   411→   411→ *   Minimum: 8,000 TRY
+   412→   412→ *   Maximum: 150,000 TRY
+   413→   413→ *
+   414→   414→ * @param price - Vehicle price/value
+   415→   415→ * @param vehicleAge - Age of vehicle in years
+   416→   416→ * @param isLuxury - Whether the brand is luxury
+   417→   417→ * @returns Annual insurance cost in TRY
+   418→   418→ */
+   419→   419→function calculateInsuranceCost(
+   420→   420→  price: number,
+   421→   421→  vehicleAge: number,
+   422→   422→  isLuxury: boolean,
+   423→   423→): number {
+   424→   424→  let rate: number;
+   425→   425→
+   426→   426→  if (vehicleAge <= 2) {
+   427→   427→    // New cars: 4-5%, linearly interpolate within bracket
+   428→   428→    rate = 5 - (vehicleAge / 2) * 1; // 5% at age 0, 4.5% at age 1, 4% at age 2
+   429→   429→  } else if (vehicleAge <= 5) {
+   430→   430→    // Mid-age: 3-4%
+   431→   431→    rate = 4 - ((vehicleAge - 2) / 3) * 1; // 4% at age 3, 3.33% at age 5
+   432→   432→  } else {
+   433→   433→    // Older: 2.5-3%
+   434→   434→    rate = 3 - Math.min((vehicleAge - 5) * 0.1, 0.5); // Gradually down to 2.5%
+   435→   435→  }
+   436→   436→
+   437→   437→  // Luxury surcharge
+   438→   438→  if (isLuxury) rate += 1;
+   439→   439→
+   440→   440→  let cost = price * (rate / 100);
+   441→   441→
+   442→   442→  // Apply minimum and maximum bounds
+   443→   443→  cost = Math.max(8000, Math.min(150000, cost));
+   444→   444→
+   445→   445→  return cost;
+   446→   446→}
+   447→   447→
+   448→   448→// ── Internal: Maintenance Cost Calculation ─────────────────────────────
+   449→   449→
+   450→   450→/**
+   451→   451→ * Calculate annual maintenance cost.
+   452→   452→ *
+   453→   453→ * Rules:
+   454→   454→ *   New (0-3 years): 3,000-5,000 TRY/year
+   455→   455→ *   Mid (4-7 years): 8,000-15,000 TRY/year
+   456→   456→ *   Older (8+ years): 15,000-30,000 TRY/year
+   457→   457→ *   Luxury: +50%
+   458→   458→ *   High mileage (>150,000 km): +30%
+   459→   459→ *
+   460→   460→ * @param vehicleAge - Age of vehicle in years
+   461→   461→ * @param isLuxury - Whether the brand is luxury
+   462→   462→ * @param mileageKm - Current mileage in km
+   463→   463→ * @returns Annual maintenance cost in TRY
+   464→   464→ */
+   465→   465→function calculateMaintenanceCost(
+   466→   466→  vehicleAge: number,
+   467→   467→  isLuxury: boolean,
+   468→   468→  mileageKm: number | null,
+   469→   469→): number {
+   470→   470→  let baseCost: number;
+   471→   471→
+   472→   472→  if (vehicleAge <= 3) {
+   473→   473→    // New: 3,000-5,000, interpolate by age within bracket
+   474→   474→    baseCost = 3000 + (vehicleAge / 3) * 2000; // 3,000 at age 0 → 5,000 at age 3
+   475→   475→  } else if (vehicleAge <= 7) {
+   476→   476→    // Mid: 8,000-15,000
+   477→   477→    baseCost = 8000 + ((vehicleAge - 3) / 4) * 7000; // 8,000 at age 4 → 15,000 at age 7
+   478→   478→  } else {
+   479→   479→    // Older: 15,000-30,000, gradually increasing
+   480→   480→    baseCost = 15000 + Math.min((vehicleAge - 7) * 2500, 15000); // Up to 30,000
+   481→   481→  }
+   482→   482→
+   483→   483→  // Luxury surcharge: +50%
+   484→   484→  if (isLuxury) {
+   485→   485→    baseCost *= 1.5;
+   486→   486→  }
+   487→   487→
+   488→   488→  // High mileage surcharge: +30% if over 150,000 km
+   489→   489→  if (mileageKm != null && mileageKm > 150000) {
+   490→   490→    baseCost *= 1.3;
+   491→   491→  }
+   492→   492→
+   493→   493→  return Math.round(baseCost);
+   494→   494→}
+   495→   495→
+   496→   496→// ── Internal: Tax (MTV) Calculation ────────────────────────────────────
+   497→   497→
+   498→   498→/**
+   499→   499→ * Calculate annual Motorlu Taşıtlar Vergisi (MTV) — Motor Vehicle Tax.
+   500→   500→ *
+   501→   501→ * Based on engine displacement and age:
+   502→   502→ *   Small engine (<1600cc): 1,000-3,000 TRY/year
+   503→   503→ *   Medium (1600-2000cc): 2,000-7,000 TRY/year
+   504→   504→ *   Large (>2000cc): 5,000-20,000 TRY/year
+   505→   505→ *
+   506→   506→ * Age discount: 5% per year after year 5, max 50%
+   507→   507→ * Electric vehicles: 25% of regular MTV
+   508→   508→ *
+   509→   509→ * @param make - Vehicle make
+   510→   510→ * @param model - Vehicle model
+   511→   511→ * @param vehicleAge - Age of vehicle in years
+   512→   512→ * @param fuelType - Fuel type
+   513→   513→ * @returns Annual MTV in TRY
+   514→   514→ */
+   515→   515→function calculateTaxCost(
+   516→   516→  make: string,
+   517→   517→  model: string,
+   518→   518→  vehicleAge: number,
+   519→   519→  fuelType: string | null,
+   520→   520→): number {
+   521→   521→  // Estimate engine displacement from make/model
+   522→   522→  const engineCc = estimateEngineDisplacement(make, model);
+   523→   523→
+   524→   524→  let baseTax: number;
+   525→   525→
+   526→   526→  if (engineCc < 1600) {
+   527→   527→    // Small engine: 1,000-3,000 TRY — scale by displacement
+   528→   528→    const ratio = engineCc / 1600;
+   529→   529→    baseTax = 1000 + ratio * 2000; // 1,000 at 0cc → 3,000 at 1600cc
+   530→   530→  } else if (engineCc <= 2000) {
+   531→   531→    // Medium: 2,000-7,000 TRY
+   532→   532→    const ratio = (engineCc - 1600) / 400;
+   533→   533→    baseTax = 2000 + ratio * 5000; // 2,000 at 1600cc → 7,000 at 2000cc
+   534→   534→  } else if (engineCc <= 3000) {
+   535→   535→    // Large: 5,000-15,000 TRY
+   536→   536→    const ratio = (engineCc - 2000) / 1000;
+   537→   537→    baseTax = 7000 + ratio * 8000; // 7,000 at 2000cc → 15,000 at 3000cc
+   538→   538→  } else {
+   539→   539→    // Very large: 15,000-20,000+ TRY
+   540→   540→    const ratio = Math.min((engineCc - 3000) / 1000, 1);
+   541→   541→    baseTax = 15000 + ratio * 5000; // 15,000 at 3000cc → 20,000 at 4000cc
+   542→   542→  }
+   543→   543→
+   544→   544→  // Age discount: 5% per year after year 5, max 50%
+   545→   545→  if (vehicleAge > 5) {
+   546→   546→    const discountPercent = Math.min((vehicleAge - 5) * 5, 50);
+   547→   547→    baseTax *= (100 - discountPercent) / 100;
+   548→   548→  }
+   549→   549→
+   550→   550→  // Electric vehicles: 25% of regular MTV
+   551→   551→  const normalizedFuel = normalizeFuelType(fuelType);
+   552→   552→  if (normalizedFuel === 'Elektrik') {
+   553→   553→    baseTax *= 0.25;
+   554→   554→  }
+   555→   555→
+   556→   556→  // Minimum MTV
+   557→   557→  return Math.max(baseTax, 500);
+   558→   558→}
+   559→   559→
+   560→   560→/**
+   561→   561→ * Estimate engine displacement based on make and model.
+   562→   562→ * Uses known patterns for Turkish market vehicles.
+   563→   563→ * Falls back to DEFAULT_ENGINE_CC (1600cc) if unknown.
+   564→   564→ *
+   565→   565→ * @param make - Vehicle make
+   566→   566→ * @param model - Vehicle model
+   567→   567→ * @returns Estimated engine displacement in cc
+   568→   568→ */
+   569→   569→function estimateEngineDisplacement(make: string, model: string): number {
+   570→   570→  const makeLower = make.toLowerCase().trim();
+   571→   571→  const modelLower = model.toLowerCase().trim();
+   572→   572→
+   573→   573→  // Check for explicit engine size indicators in model name
+   574→   574→  // Common patterns: "1.6", "2.0", "30d", "520i", "C200", "320i", etc.
+   575→   575→
+   576→   576→  // BMW naming: 3-digit number = displacement hint
+   577→   577→  // e.g., 320i ≈ 2000cc, 520i ≈ 2000cc, 740i ≈ 3000cc
+   578→   578→  if (makeLower === 'bmw') {
+   579→   579→    const bmwMatch = modelLower.match(/(\d)(\d{2})/);
+   580→   580→    if (bmwMatch) {
+   581→   581→      const series = parseInt(bmwMatch[1]);
+   582→   582→      const engineCode = parseInt(bmwMatch[2]);
+   583→   583→      if (engineCode >= 40) return 3000;
+   584→   584→      if (engineCode >= 30) return 3000;
+   585→   585→      if (engineCode >= 25) return 2500;
+   586→   586→      if (engineCode >= 20) return 2000;
+   587→   587→      if (engineCode >= 18) return 1800;
+   588→   588→      if (engineCode >= 16) return 1600;
+   589→   589→      return 2000; // default for BMW
+   590→   590→    }
+   591→   591→    // M models
+   592→   592→    if (modelLower.includes('m3') || modelLower.includes('m5') || modelLower.includes('m4')) {
+   593→   593→      return 3000;
+   594→   594→    }
+   595→   595→    // X5, X7 etc. tend to have larger engines
+   596→   596→    if (modelLower.includes('x5') || modelLower.includes('x7') || modelLower.includes('x6')) {
+   597→   597→      return 3000;
+   598→   598→    }
+   599→   599→    return 2000; // BMW default
+   600→   600→  }
+   601→   601→
+   602→   602→  // Mercedes naming: C200, E300, etc.
+   603→   603→  if (makeLower === 'mercedes-benz' || makeLower === 'mercedes') {
+   604→   604→    const mbMatch = modelLower.match(/([a-z])(\d{3})/);
+   605→   605→    if (mbMatch) {
+   606→   606→      const engineCode = parseInt(mbMatch[2]);
+   607→   607→      if (engineCode >= 400) return 3000;
+   608→   608→      if (engineCode >= 300) return 3000;
+   609→   609→      if (engineCode >= 250) return 2500;
+   610→   610→      if (engineCode >= 220) return 2000;
+   611→   611→      if (engineCode >= 200) return 2000;
+   612→   612→      if (engineCode >= 180) return 1600;
+   613→   613→      if (engineCode >= 160) return 1600;
+   614→   614→      return 2000;
+   615→   615→    }
+   616→   616→    // AMG models
+   617→   617→    if (modelLower.includes('amg')) return 3000;
+   618→   618→    // S-Class, G-Class, GLS tend to have larger engines
+   619→   619→    if (modelLower.includes('s serisi') || modelLower.includes('gle') || modelLower.includes('gls')) {
+   620→   620→      return 3000;
+   621→   621→    }
+   622→   622→    return 2000; // Mercedes default
+   623→   623→  }
+   624→   624→
+   625→   625→  // Audi: A3/A4/A5 = ~2000cc, A6/A7/A8 = ~3000cc, Q7/Q8 = ~3000cc
+   626→   626→  if (makeLower === 'audi') {
+   627→   627→    if (modelLower.includes('a8') || modelLower.includes('a7') || modelLower.includes('q7') || modelLower.includes('q8') || modelLower.includes('s') || modelLower.includes('rs')) {
+   628→   628→      return 3000;
+   629→   629→    }
+   630→   630→    if (modelLower.includes('a6') || modelLower.includes('q5')) {
+   631→   631→      return 2000;
+   632→   632→    }
+   633→   633→    return 1600; // A1, A3, A4, Q2, Q3
+   634→   634→  }
+   635→   635→
+   636→   636→  // Volvo: generally 2000cc for newer models
+   637→   637→  if (makeLower === 'volvo') {
+   638→   638→    if (modelLower.includes('xc90') || modelLower.includes('xc60') || modelLower.includes('s90')) {
+   639→   639→      return 2000;
+   640→   640→    }
+   641→   641→    return 2000;
+   642→   642→  }
+   643→   643→
+   644→   644→  // Volkswagen: mostly 1400-2000cc
+   645→   645→  if (makeLower === 'volkswagen' || makeLower === 'vw') {
+   646→   646→    if (modelLower.includes('passat') || modelLower.includes('tiguan') || modelLower.includes('arteon')) {
+   647→   647→      return 1600;
+   648→   648→    }
+   649→   649→    if (modelLower.includes('golf') || modelLower.includes('jetta') || modelLower.includes('t-roc')) {
+   650→   650→      return 1400;
+   651→   651→    }
+   652→   652→    if (modelLower.includes('touareg')) return 3000;
+   653→   653→    return 1400;
+   654→   654→  }
+   655→   655→
+   656→   656→  // Toyota: mostly 1500-2000cc
+   657→   657→  if (makeLower === 'toyota') {
+   658→   658→    if (modelLower.includes('land cruiser') || modelLower.includes('highlander')) return 2700;
+   659→   659→    if (modelLower.includes('camry') || modelLower.includes('rav4')) return 2000;
+   660→   660→    if (modelLower.includes('corolla') || modelLower.includes('c-hr')) return 1800;
+   661→   661→    if (modelLower.includes('yaris') || modelLower.includes('auris')) return 1500;
+   662→   662→    return 1600;
+   663→   663→  }
+   664→   664→
+   665→   665→  // Honda
+   666→   666→  if (makeLower === 'honda') {
+   667→   667→    if (modelLower.includes('cr-v') || modelLower.includes('accord')) return 1500;
+   668→   668→    if (modelLower.includes('civic')) return 1400;
+   669→   669→    return 1500;
+   670→   670→  }
+   671→   671→
+   672→   672→  // Hyundai
+   673→   673→  if (makeLower === 'hyundai') {
+   674→   674→    if (modelLower.includes('santa fe') || modelLower.includes('staria')) return 2200;
+   675→   675→    if (modelLower.includes('tucson') || modelLower.includes('i30') || modelLower.includes('elantra')) return 1600;
+   676→   676→    if (modelLower.includes('i20') || modelLower.includes('accent') || modelLower.includes('bayon')) return 1400;
+   677→   677→    return 1600;
+   678→   678→  }
+   679→   679→
+   680→   680→  // Ford
+   681→   681→  if (makeLower === 'ford') {
+   682→   682→    if (modelLower.includes('explorer') || modelLower.includes('mustang') || modelLower.includes('ranger')) return 2500;
+   683→   683→    if (modelLower.includes('kuga') || modelLower.includes('focus') || modelLower.includes('puma')) return 1500;
+   684→   684→    return 1600;
+   685→   685→  }
+   686→   686→
+   687→   687→  // Renault
+   688→   688→  if (makeLower === 'renault') {
+   689→   689→    if (modelLower.includes('kadjar') || modelLower.includes('talisman') || modelLower.includes('scenic')) return 1600;
+   690→   690→    if (modelLower.includes('megane') || modelLower.includes('captur') || modelLower.includes('fluence')) return 1400;
+   691→   691→    if (modelLower.includes('clio') || modelLower.includes('symbol')) return 1000;
+   692→   692→    return 1400;
+   693→   693→  }
+   694→   694→
+   695→   695→  // Fiat
+   696→   696→  if (makeLower === 'fiat') {
+   697→   697→    if (modelLower.includes('egea') || modelLower.includes('tipo')) return 1400;
+   698→   698→    if (modelLower.includes('500x')) return 1400;
+   699→   699→    if (modelLower.includes('500') && !modelLower.includes('500x')) return 1200;
+   700→   700→    if (modelLower.includes('panda') || modelLower.includes('punto')) return 1200;
+   701→   701→    return 1400;
+   702→   702→  }
+   703→   703→
+   704→   704→  // Dacia
+   705→   705→  if (makeLower === 'dacia') {
+   706→   706→    if (modelLower.includes('duster')) return 1500;
+   707→   707→    if (modelLower.includes('spring')) return 0; // Electric, no displacement
+   708→   708→    return 1400;
+   709→   709→  }
+   710→   710→
+   711→   711→  // Peugeot, Opel, Citroen: mostly 1200-1600cc
+   712→   712→  if (makeLower === 'peugeot' || makeLower === 'opel' || makeLower === 'citroen') {
+   713→   713→    if (modelLower.includes('5008') || modelLower.includes('insignia') || modelLower.includes('grandland')) return 1600;
+   714→   714→    return 1400;
+   715→   715→  }
+   716→   716→
+   717→   717→  // Skoda, Seat
+   718→   718→  if (makeLower === 'skoda' || makeLower === 'seat') {
+   719→   719→    if (modelLower.includes('superb') || modelLower.includes('kodiaq') || modelLower.includes('tarraco')) return 1600;
+   720→   720→    return 1400;
+   721→   721→  }
+   722→   722→
+   723→   723→  // Kia
+   724→   724→  if (makeLower === 'kia') {
+   725→   725→    if (modelLower.includes('sorento') || modelLower.includes('carnival') || modelLower.includes('ev6')) return 2000;
+   726→   726→    if (modelLower.includes('sportage') || modelLower.includes('niro')) return 1600;
+   727→   727→    if (modelLower.includes('ceed') || modelLower.includes('stonic')) return 1400;
+   728→   728→    return 1400;
+   729→   729→  }
+   730→   730→
+   731→   731→  // Nissan
+   732→   732→  if (makeLower === 'nissan') {
+   733→   733→    if (modelLower.includes('patrol') || modelLower.includes('navara')) return 3000;
+   734→   734→    if (modelLower.includes('qashqai') || modelLower.includes('x-trail')) return 1600;
+   735→   735→    return 1400;
+   736→   736→  }
+   737→   737→
+   738→   738→  // Land Rover / Range Rover / Jeep
+   739→   739→  if (makeLower === 'land rover' || makeLower === 'jeep') {
+   740→   740→    return 2000;
+   741→   741→  }
+   742→   742→
+   743→   743→  // Lexus, Infiniti
+   744→   744→  if (makeLower === 'lexus' || makeLower === 'infiniti') {
+   745→   745→    return 2500;
+   746→   746→  }
+   747→   747→
+   748→   748→  // Mini
+   749→   749→  if (makeLower === 'mini') {
+   750→   750→    return 1500;
+   751→   751→  }
+   752→   752→
+   753→   753→  // Alfa Romeo
+   754→   754→  if (makeLower === 'alfa romeo') {
+   755→   755→    if (modelLower.includes('giulia') || modelLower.includes('stelvio')) return 2000;
+   756→   756→    return 1400;
+   757→   757→  }
+   758→   758→
+   759→   759→  // Mazda
+   760→   760→  if (makeLower === 'mazda') {
+   761→   761→    if (modelLower.includes('cx-9') || modelLower.includes('cx-5')) return 2500;
+   762→   762→    return 2000;
+   763→   763→  }
+   764→   764→
+   765→   765→  // Suzuki
+   766→   766→  if (makeLower === 'suzuki') {
+   767→   767→    if (modelLower.includes('jimny')) return 1500;
+   768→   768→    return 1400;
+   769→   769→  }
+   770→   770→
+   771→   771→  // Mitsubishi
+   772→   772→  if (makeLower === 'mitsubishi') {
+   773→   773→    if (modelLower.includes('pajero') || modelLower.includes('outlander') || modelLower.includes('l200')) return 2400;
+   774→   774→    return 1500;
+   775→   775→  }
+   776→   776→
+   777→   777→  // Chevrolet
+   778→   778→  if (makeLower === 'chevrolet') {
+   779→   779→    if (modelLower.includes('camaro') || modelLower.includes('silverado')) return 3600;
+   780→   780→    return 1400;
+   781→   781→  }
+   782→   782→
+   783→   783→  // Tofaş
+   784→   784→  if (makeLower === 'tofaş' || makeLower === 'tofas') {
+   785→   785→    return 1600; // Şahin, Doğan, Kartal all had 1.6L engines
+   786→   786→  }
+   787→   787→
+   788→   788→  // Check for common engine size patterns in model name
+   789→   789→  const engineMatch = modelLower.match(/(\d\.\d)/);
+   790→   790→  if (engineMatch) {
+   791→   791→    return parseFloat(engineMatch[1]) * 1000;
+   792→   792→  }
+   793→   793→
+   794→   794→  // Default: 1600cc (most common in Turkey)
+   795→   795→  return DEFAULT_ENGINE_CC;
+   796→   796→}
+   797→   797→

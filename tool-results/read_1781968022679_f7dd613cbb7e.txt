@@ -1,0 +1,1606 @@
+     1→     1→4.3. Rate Limiter (Scraping Koruma)
+     2→     2→typescript
+     3→     3→// apps/scraper/src/utils/rateLimiter.ts
+     4→     4→
+     5→     5→interface RateLimiterConfig {
+     6→     6→  maxRequests: number;
+     7→     7→  perSeconds: number;
+     8→     8→  key: string;
+     9→     9→}
+    10→    10→
+    11→    11→export class RateLimiter {
+    12→    12→  private maxRequests: number;
+    13→    13→  private perSeconds: number;
+    14→    14→  private key: string;
+    15→    15→  private requests: number[] = [];
+    16→    16→  private lock: Promise<void> = Promise.resolve();
+    17→    17→
+    18→    18→  constructor(config: RateLimiterConfig) {
+    19→    19→    this.maxRequests = config.maxRequests;
+    20→    20→    this.perSeconds = config.perSeconds;
+    21→    21→    this.key = config.key;
+    22→    22→  }
+    23→    23→
+    24→    24→  async wait(): Promise<void> {
+    25→    25→    await this.lock;
+    26→    26→    
+    27→    27→    this.lock = this.lock.then(async () => {
+    28→    28→      const now = Date.now();
+    29→    29→      const windowStart = now - (this.perSeconds * 1000);
+    30→    30→      
+    31→    31→      // Eski istekleri temizle
+    32→    32→      this.requests = this.requests.filter(time => time > windowStart);
+    33→    33→      
+    34→    34→      if (this.requests.length >= this.maxRequests) {
+    35→    35→        const oldestRequest = this.requests[0];
+    36→    36→        const waitTime = (oldestRequest + (this.perSeconds * 1000)) - now;
+    37→    37→        
+    38→    38→        if (waitTime > 0) {
+    39→    39→          console.log(`[RateLimiter:${this.key}] Waiting ${waitTime}ms`);
+    40→    40→          await new Promise(resolve => setTimeout(resolve, waitTime + 100));
+    41→    41→        }
+    42→    42→      }
+    43→    43→      
+    44→    44→      this.requests.push(Date.now());
+    45→    45→    });
+    46→    46→    
+    47→    47→    await this.lock;
+    48→    48→  }
+    49→    49→
+    50→    50→  getStats(): { requests: number; maxRequests: number; windowSeconds: number } {
+    51→    51→    const now = Date.now();
+    52→    52→    const windowStart = now - (this.perSeconds * 1000);
+    53→    53→    const activeRequests = this.requests.filter(time => time > windowStart);
+    54→    54→    
+    55→    55→    return {
+    56→    56→      requests: activeRequests.length,
+    57→    57→      maxRequests: this.maxRequests,
+    58→    58→      windowSeconds: this.perSeconds
+    59→    59→    };
+    60→    60→  }
+    61→    61→}
+    62→    62→5. NORMALİZASYON MOTORU
+    63→    63→typescript
+    64→    64→// apps/scraper/src/normalizer.ts
+    65→    65→
+    66→    66→import { ListingRaw } from './adapters/base';
+    67→    67→
+    68→    68→export class Normalizer {
+    69→    69→  // Tüm Türkiye pazarına uygun normalizasyon
+    70→    70→  static normalize(raw: ListingRaw): any {
+    71→    71→    return {
+    72→    72→      sourceName: raw.sourceName,
+    73→    73→      sourceUrl: raw.sourceUrl,
+    74→    74→      vin: raw.vin || null,
+    75→    75→      make: this.normalizeMake(raw.make),
+    76→    76→      model: this.normalizeModel(raw.model),
+    77→    77→      trim: raw.trim || null,
+    78→    78→      year: raw.year,
+    79→    79→      price: raw.price,
+    80→    80→      currency: raw.currency || 'TRY',
+    81→    81→      mileageKm: raw.mileageKm || null,
+    82→    82→      fuelType: this.normalizeFuel(raw.fuelType),
+    83→    83→      transmission: this.normalizeTransmission(raw.transmission),
+    84→    84→      bodyType: this.normalizeBodyType(raw.bodyType),
+    85→    85→      color: raw.color || null,
+    86→    86→      city: this.normalizeCity(raw.city),
+    87→    87→      district: raw.district || null,
+    88→    88→      sellerType: this.normalizeSellerType(raw.sellerType),
+    89→    89→      imageUrl: raw.imageUrl || null,
+    90→    90→      imageUrls: raw.imageUrls || [],
+    91→    91→      description: raw.description || null,
+    92→    92→      firstSeenAt: raw.firstSeenAt || new Date(),
+    93→    93→      lastSeenAt: raw.lastSeenAt || new Date(),
+    94→    94→      isActive: raw.isActive !== undefined ? raw.isActive : true
+    95→    95→    };
+    96→    96→  }
+    97→    97→
+    98→    98→  // Şehir normalizasyonu (Türkiye için)
+    99→    99→  private static normalizeCity(value: string): string {
+   100→   100→    if (!value) return '';
+   101→   101→    const map: Record<string, string> = {
+   102→   102→      'istanbul': 'istanbul',
+   103→   103→      'ankara': 'ankara',
+   104→   104→      'izmir': 'izmir',
+   105→   105→      'antalya': 'antalya',
+   106→   106→      'bursa': 'bursa',
+   107→   107→      'adana': 'adana',
+   108→   108→      'konya': 'konya',
+   109→   109→      'gaziantep': 'gaziantep',
+   110→   110→      'mersin': 'mersin',
+   111→   111→      'kayseri': 'kayseri',
+   112→   112→      'eskişehir': 'eskisehir',
+   113→   113→      'malatya': 'malatya',
+   114→   114→      'samsun': 'samsun',
+   115→   115→      'trabzon': 'trabzon',
+   116→   116→      'erzurum': 'erzurum',
+   117→   117→      'diyarbakır': 'diyarbakir',
+   118→   118→      'şanlıurfa': 'sanliurfa',
+   119→   119→      'kocaeli': 'kocaeli',
+   120→   120→      'sakarya': 'sakarya',
+   121→   121→      'denizli': 'denizli'
+   122→   122→    };
+   123→   123→    return map[value.toLowerCase().trim()] || value.toLowerCase().trim();
+   124→   124→  }
+   125→   125→
+   126→   126→  // Marka normalizasyonu (genişletilmiş)
+   127→   127→  static normalizeMake(value: string): string {
+   128→   128→    if (!value) return '';
+   129→   129→    const map: Record<string, string> = {
+   130→   130→      'ford': 'ford',
+   131→   131→      'opel': 'opel',
+   132→   132→      'vw': 'volkswagen',
+   133→   133→      'volkswagen': 'volkswagen',
+   134→   134→      'bmw': 'bmw',
+   135→   135→      'mercedes': 'mercedes-benz',
+   136→   136→      'mercedes-benz': 'mercedes-benz',
+   137→   137→      'audi': 'audi',
+   138→   138→      'toyota': 'toyota',
+   139→   139→      'renault': 'renault',
+   140→   140→      'fiat': 'fiat',
+   141→   141→      'hyundai': 'hyundai',
+   142→   142→      'nissan': 'nissan',
+   143→   143→      'honda': 'honda',
+   144→   144→      'peugeot': 'peugeot',
+   145→   145→      'citroen': 'citroen',
+   146→   146→      'skoda': 'skoda',
+   147→   147→      'seat': 'seat',
+   148→   148→      'kia': 'kia',
+   149→   149→      'mazda': 'mazda',
+   150→   150→      'volvo': 'volvo',
+   151→   151→      'land rover': 'land-rover',
+   152→   152→      'jaguar': 'jaguar',
+   153→   153→      'porsche': 'porsche',
+   154→   154→      'ferrari': 'ferrari',
+   155→   155→      'lamborghini': 'lamborghini',
+   156→   156→      'maserati': 'maserati',
+   157→   157→      'bentley': 'bentley',
+   158→   158→      'rolls-royce': 'rolls-royce',
+   159→   159→      'mini': 'mini',
+   160→   160→      'smart': 'smart',
+   161→   161→      'subaru': 'subaru',
+   162→   162→      'suzuki': 'suzuki',
+   163→   163→      'mitsubishi': 'mitsubishi',
+   164→   164→      'dacia': 'dacia',
+   165→   165→      'chery': 'chery',
+   166→   166→      'togg': 'togg',
+   167→   167→      'tesla': 'tesla',
+   168→   168→      'alfa romeo': 'alfa-romeo',
+   169→   169→      'abarth': 'abarth',
+   170→   170→      'lancia': 'lancia',
+   171→   171→      'dodge': 'dodge',
+   172→   172→      'chevrolet': 'chevrolet',
+   173→   173→      'chrysler': 'chrysler',
+   174→   174→      'jeep': 'jeep',
+   175→   175→      'cadillac': 'cadillac',
+   176→   176→      'infiniti': 'infiniti',
+   177→   177→      'acura': 'acura',
+   178→   178→      'lexus': 'lexus',
+   179→   179→      'mg': 'mg'
+   180→   180→    };
+   181→   181→    return map[value.toLowerCase().trim()] || value.toLowerCase().trim();
+   182→   182→  }
+   183→   183→
+   184→   184→  static normalizeModel(value: string): string {
+   185→   185→    if (!value) return '';
+   186→   186→    const map: Record<string, string> = {
+   187→   187→      'focus': 'focus',
+   188→   188→      'corsa': 'corsa',
+   189→   189→      'astra': 'astra',
+   190→   190→      'insignia': 'insignia',
+   191→   191→      'golf': 'golf',
+   192→   192→      'passat': 'passat',
+   193→   193→      'polo': 'polo',
+   194→   194→      '3 serisi': '3-series',
+   195→   195→      '5 serisi': '5-series',
+   196→   196→      'a3': 'a3',
+   197→   197→      'a4': 'a4',
+   198→   198→      'a6': 'a6',
+   199→   199→      'corolla': 'corolla',
+   200→   200→      'camry': 'camry',
+   201→   201→      'megane': 'megane',
+   202→   202→      'clio': 'clio',
+   203→   203→      'punto': 'punto',
+   204→   204→      'egea': 'egea'
+   205→   205→    };
+   206→   206→    return map[value.toLowerCase().trim()] || value.toLowerCase().trim();
+   207→   207→  }
+   208→   208→
+   209→   209→  static normalizeFuel(value: string): string {
+   210→   210→    if (!value) return 'unknown';
+   211→   211→    const map: Record<string, string> = {
+   212→   212→      'benzin': 'petrol',
+   213→   213→      'dizel': 'diesel',
+   214→   214→      'lpg': 'lpg',
+   215→   215→      'elektrik': 'electric',
+   216→   216→      'hibrit': 'hybrid',
+   217→   217→      'benzin+lpg': 'petrol-lpg'
+   218→   218→    };
+   219→   219→    return map[value.toLowerCase().trim()] || value.toLowerCase().trim();
+   220→   220→  }
+   221→   221→
+   222→   222→  static normalizeTransmission(value: string): string {
+   223→   223→    if (!value) return 'unknown';
+   224→   224→    const map: Record<string, string> = {
+   225→   225→      'manuel': 'manual',
+   226→   226→      'otomatik': 'automatic',
+   227→   227→      'yarı otomatik': 'semi-automatic',
+   228→   228→      'cvt': 'cvt',
+   229→   229→      'dsg': 'dsg',
+   230→   230→      'triptonic': 'triptonic'
+   231→   231→    };
+   232→   232→    return map[value.toLowerCase().trim()] || value.toLowerCase().trim();
+   233→   233→  }
+   234→   234→
+   235→   235→  static normalizeBodyType(value: string): string {
+   236→   236→    if (!value) return 'unknown';
+   237→   237→    const map: Record<string, string> = {
+   238→   238→      'sedan': 'sedan',
+   239→   239→      'hatchback': 'hatchback',
+   240→   240→      'suv': 'suv',
+   241→   241→      'pick-up': 'pickup',
+   242→   242→      'coupe': 'coupe',
+   243→   243→      'cabrio': 'convertible',
+   244→   244→      'station wagon': 'station-wagon',
+   245→   245→      'minivan': 'minivan',
+   246→   246→      'mpv': 'mpv'
+   247→   247→    };
+   248→   248→    return map[value.toLowerCase().trim()] || value.toLowerCase().trim();
+   249→   249→  }
+   250→   250→
+   251→   251→  static normalizeSellerType(value: string): string {
+   252→   252→    if (!value) return 'unknown';
+   253→   253→    const map: Record<string, string> = {
+   254→   254→      'sahibinden': 'private',
+   255→   255→      'galeri': 'dealer',
+   256→   256→      'kurumsal': 'corporate',
+   257→   257→      'firma': 'corporate',
+   258→   258→      'yetkili bayi': 'authorized-dealer'
+   259→   259→    };
+   260→   260→    return map[value.toLowerCase().trim()] || value.toLowerCase().trim();
+   261→   261→  }
+   262→   262→}
+   263→   263→6. DEDUPLICATOR (Çapraz-Kaynak Tekilleştirme)
+   264→   264→typescript
+   265→   265→// apps/scraper/src/deduplicator.ts
+   266→   266→
+   267→   267→import { PrismaClient } from '@prisma/client';
+   268→   268→import { ListingRaw } from './adapters/base';
+   269→   269→
+   270→   270→const prisma = new PrismaClient();
+   271→   271→
+   272→   272→export class Deduplicator {
+   273→   273→  // Gruplama stratejileri
+   274→   274→  private static readonly MAX_PRICE_DIFF_PERCENT = 0.05; // %5
+   275→   275→  private static readonly MAX_MILEAGE_DIFF_PERCENT = 0.05; // %5
+   276→   276→  private static readonly SAME_YEAR_ALLOWED = 1; // ±1 yıl
+   277→   277→
+   278→   278→  static async groupDuplicates(listings: ListingRaw[]): Promise<Map<string, string[]>> {
+   279→   279→    const groups = new Map<string, string[]>();
+   280→   280→    const processed = new Set<string>();
+   281→   281→
+   282→   282→    for (const listing of listings) {
+   283→   283→      if (processed.has(listing.sourceUrl)) continue;
+   284→   284→      
+   285→   285→      const groupKey = await this.findOrCreateGroup(listing);
+   286→   286→      if (!groupKey) continue;
+   287→   287→      
+   288→   288→      if (!groups.has(groupKey)) {
+   289→   289→        groups.set(groupKey, []);
+   290→   290→      }
+   291→   291→      
+   292→   292→      groups.get(groupKey)!.push(listing.sourceUrl);
+   293→   293→      processed.add(listing.sourceUrl);
+   294→   294→    }
+   295→   295→
+   296→   296→    return groups;
+   297→   297→  }
+   298→   298→
+   299→   299→  private static async findOrCreateGroup(listing: ListingRaw): Promise<string | null> {
+   300→   300→    // 1. VIN ile eşleştirme (en güvenilir)
+   301→   301→    if (listing.vin) {
+   302→   302→      const existing = await prisma.listing.findFirst({
+   303→   303→        where: {
+   304→   304→          vin: listing.vin,
+   305→   305→          isActive: true,
+   306→   306→          id: { not: listing.id }
+   307→   307→        }
+   308→   308→      });
+   309→   309→      
+   310→   310→      if (existing) {
+   311→   311→        return existing.duplicateGroupId || `vin:${listing.vin}`;
+   312→   312→      }
+   313→   313→    }
+   314→   314→
+   315→   315→    // 2. Make+Model+Year + Benzer Km + Benzer Fiyat + Aynı Şehir
+   316→   316→    const similar = await prisma.listing.findMany({
+   317→   317→      where: {
+   318→   318→        make: listing.make,
+   319→   319→        model: listing.model,
+   320→   320→        year: {
+   321→   321→          gte: listing.year - this.SAME_YEAR_ALLOWED,
+   322→   322→          lte: listing.year + this.SAME_YEAR_ALLOWED
+   323→   323→        },
+   324→   324→        city: listing.city,
+   325→   325→        isActive: true,
+   326→   326→        id: { not: listing.id }
+   327→   327→      },
+   328→   328→      select: {
+   329→   329→        id: true,
+   330→   330→        price: true,
+   331→   331→        mileageKm: true,
+   332→   332→        duplicateGroupId: true
+   333→   333→      }
+   334→   334→    });
+   335→   335→
+   336→   336→    for (const candidate of similar) {
+   337→   337→      // Km farkı kontrolü
+   338→   338→      const kmDiff = Math.abs((candidate.mileageKm || 0) - (listing.mileageKm || 0));
+   339→   339→      const kmPercent = kmDiff / Math.max(candidate.mileageKm || 1, listing.mileageKm || 1);
+   340→   340→      
+   341→   341→      // Fiyat farkı kontrolü
+   342→   342→      const priceDiff = Math.abs(candidate.price - listing.price);
+   343→   343→      const pricePercent = priceDiff / Math.max(candidate.price, listing.price);
+   344→   344→
+   345→   345→      if (kmPercent <= this.MAX_MILEAGE_DIFF_PERCENT && 
+   346→   346→          pricePercent <= this.MAX_PRICE_DIFF_PERCENT) {
+   347→   347→        return candidate.duplicateGroupId || `group:${candidate.id}`;
+   348→   348→      }
+   349→   349→    }
+   350→   350→
+   351→   351→    return null;
+   352→   352→  }
+   353→   353→
+   354→   354→  static async getDuplicateGroup(listingId: string): Promise<string[]> {
+   355→   355→    const group = await prisma.duplicateGroup.findFirst({
+   356→   356→      where: {
+   357→   357→        listingIds: {
+   358→   358→          has: listingId
+   359→   359→        }
+   360→   360→      }
+   361→   361→    });
+   362→   362→    
+   363→   363→    return group?.listingIds || [];
+   364→   364→  }
+   365→   365→}
+   366→   366→7. DEĞERLEME MOTORU (Valuator)
+   367→   367→typescript
+   368→   368→// apps/scraper/src/valuator.ts
+   369→   369→
+   370→   370→import { PrismaClient } from '@prisma/client';
+   371→   371→
+   372→   372→const prisma = new PrismaClient();
+   373→   373→
+   374→   374→interface ValueEstimate {
+   375→   375→  value: number;
+   376→   376→  confidence: 'high' | 'medium' | 'low' | 'insufficient';
+   377→   377→  sampleSize: number;
+   378→   378→  minPrice: number;
+   379→   379→  maxPrice: number;
+   380→   380→  medianPrice: number;
+   381→   381→}
+   382→   382→
+   383→   383→export class Valuator {
+   384→   384→  private static readonly MIN_SAMPLE_SIZE = 5;
+   385→   385→  private static readonly HIGH_CONFIDENCE_SIZE = 20;
+   386→   386→  private static readonly MEDIUM_CONFIDENCE_SIZE = 10;
+   387→   387→
+   388→   388→  static async updateAllListings(): Promise<void> {
+   389→   389→    const listings = await prisma.listing.findMany({
+   390→   390→      where: { isActive: true },
+   391→   391→      orderBy: { lastSeenAt: 'desc' }
+   392→   392→    });
+   393→   393→
+   394→   394→    let updatedCount = 0;
+   395→   395→    for (const listing of listings) {
+   396→   396→      try {
+   397→   397→        const estimate = await this.estimateValue(listing);
+   398→   398→        const dealScore = this.calculateDealScore(listing.price, estimate.value);
+   399→   399→        const dealTag = this.getDealTag(dealScore, estimate.confidence);
+   400→   400→
+   401→   401→        await prisma.listing.update({
+   402→   402→          where: { id: listing.id },
+   403→   403→          data: {
+   404→   404→            estimatedValue: estimate.value,
+   405→   405→            confidence: estimate.confidence,
+   406→   406→            comparableCount: estimate.sampleSize,
+   407→   407→            dealScore: dealScore,
+   408→   408→            dealTag: dealTag
+   409→   409→          }
+   410→   410→        });
+   411→   411→        
+   412→   412→        updatedCount++;
+   413→   413→      } catch (error) {
+   414→   414→        console.error(`Error updating listing ${listing.id}:`, error);
+   415→   415→      }
+   416→   416→    }
+   417→   417→
+   418→   418→    console.log(`Updated ${updatedCount} listings with valuations`);
+   419→   419→  }
+   420→   420→
+   421→   421→  private static async estimateValue(listing: any): Promise<ValueEstimate> {
+   422→   422→    // Comparables: aynı make+model, year ±1, aynı fuel ve transmission
+   423→   423→    const comparables = await prisma.listing.findMany({
+   424→   424→      where: {
+   425→   425→        make: listing.make,
+   426→   426→        model: listing.model,
+   427→   427→        year: {
+   428→   428→          gte: listing.year - 1,
+   429→   429→          lte: listing.year + 1
+   430→   430→        },
+   431→   431→        fuelType: listing.fuelType,
+   432→   432→        transmission: listing.transmission,
+   433→   433→        isActive: true,
+   434→   434→        id: { not: listing.id }
+   435→   435→      },
+   436→   436→      select: {
+   437→   437→        price: true,
+   438→   438→        mileageKm: true
+   439→   439→      }
+   440→   440→    });
+   441→   441→
+   442→   442→    const sampleSize = comparables.length;
+   443→   443→    
+   444→   444→    if (sampleSize < this.MIN_SAMPLE_SIZE) {
+   445→   445→      return {
+   446→   446→        value: listing.price,
+   447→   447→        confidence: 'insufficient',
+   448→   448→        sampleSize: sampleSize,
+   449→   449→        minPrice: listing.price,
+   450→   450→        maxPrice: listing.price,
+   451→   451→        medianPrice: listing.price
+   452→   452→      };
+   453→   453→    }
+   454→   454→
+   455→   455→    // Fiyatları topla ve sırala
+   456→   456→    const prices = comparables.map(c => c.price).sort((a, b) => a - b);
+   457→   457→    const medianPrice = this.calculateMedian(prices);
+   458→   458→    
+   459→   459→    // Km düzeltmesi (basit regresyon)
+   460→   460→    const mileageAdjustment = this.calculateMileageAdjustment(comparables, listing.mileageKm);
+   461→   461→    
+   462→   462→    const estimatedValue = Math.round(medianPrice + mileageAdjustment);
+   463→   463→    
+   464→   464→    // Confidence değerlendirmesi
+   465→   465→    let confidence: 'high' | 'medium' | 'low' | 'insufficient';
+   466→   466→    if (sampleSize >= this.HIGH_CONFIDENCE_SIZE) {
+   467→   467→      confidence = 'high';
+   468→   468→    } else if (sampleSize >= this.MEDIUM_CONFIDENCE_SIZE) {
+   469→   469→      confidence = 'medium';
+   470→   470→    } else {
+   471→   471→      confidence = 'low';
+   472→   472→    }
+   473→   473→
+   474→   474→    return {
+   475→   475→      value: estimatedValue,
+   476→   476→      confidence,
+   477→   477→      sampleSize,
+   478→   478→      minPrice: prices[0],
+   479→   479→      maxPrice: prices[prices.length - 1],
+   480→   480→      medianPrice
+   481→   481→    };
+   482→   482→  }
+   483→   483→
+   484→   484→  private static calculateMileageAdjustment(comparables: any[], targetMileage: number): number {
+   485→   485→    if (comparables.length < 2 || !targetMileage) return 0;
+   486→   486→    
+   487→   487→    // Basit lineer regresyon: price ~ mileage
+   488→   488→    const prices = comparables.map(c => c.price);
+   489→   489→    const mileages = comparables.map(c => c.mileageKm || 0);
+   490→   490→    
+   491→   491→    // Ortalamalar
+   492→   492→    const avgPrice = prices.reduce((a, b) => a + b, 0) / prices.length;
+   493→   493→    const avgMileage = mileages.reduce((a, b) => a + b, 0) / mileages.length;
+   494→   494→    
+   495→   495→    // Slope hesapla
+   496→   496→    let numerator = 0;
+   497→   497→    let denominator = 0;
+   498→   498→    for (let i = 0; i < comparables.length; i++) {
+   499→   499→      const priceDiff = prices[i] - avgPrice;
+   500→   500→      const mileageDiff = (mileages[i] || 0) - avgMileage;
+   501→   501→      numerator += priceDiff * mileageDiff;
+   502→   502→      denominator += mileageDiff * mileageDiff;
+   503→   503→    }
+   504→   504→    
+   505→   505→    const slope = denominator !== 0 ? numerator / denominator : 0;
+   506→   506→    const mileageDiff = (targetMileage || 0) - avgMileage;
+   507→   507→    
+   508→   508→    return slope * mileageDiff;
+   509→   509→  }
+   510→   510→
+   511→   511→  private static calculateMedian(arr: number[]): number {
+   512→   512→    const sorted = [...arr].sort((a, b) => a - b);
+   513→   513→    const mid = Math.floor(sorted.length / 2);
+   514→   514→    return sorted.length % 2 !== 0 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+   515→   515→  }
+   516→   516→
+   517→   517→  private static calculateDealScore(price: number, estimatedValue: number): number {
+   518→   518→    if (!estimatedValue || estimatedValue === 0) return 0;
+   519→   519→    return (price - estimatedValue) / estimatedValue;
+   520→   520→  }
+   521→   521→
+   522→   522→  private static getDealTag(score: number, confidence: string): string {
+   523→   523→    if (confidence === 'insufficient') {
+   524→   524→      return 'Değerlendirilemedi';
+   525→   525→    }
+   526→   526→    
+   527→   527→    if (score < -0.15) return 'Harika Fırsat';
+   528→   528→    if (score < -0.05) return 'İyi Fiyat';
+   529→   529→    if (score < 0.05) return 'Piyasa Fiyatı';
+   530→   530→    if (score < 0.15) return 'Piyasa Üstü';
+   531→   531→    return 'Pahalı';
+   532→   532→  }
+   533→   533→
+   534→   534→  // Belirli bir ilan için manuel değerleme
+   535→   535→  static async estimateSingleListing(listingId: string): Promise<ValueEstimate | null> {
+   536→   536→    const listing = await prisma.listing.findUnique({
+   537→   537→      where: { id: listingId }
+   538→   538→    });
+   539→   539→    
+   540→   540→    if (!listing) return null;
+   541→   541→    return this.estimateValue(listing);
+   542→   542→  }
+   543→   543→}
+   544→   544→8. SAHİP OLMA MALİYETİ (Cost Estimator)
+   545→   545→typescript
+   546→   546→// apps/scraper/src/cost_estimator.ts
+   547→   547→
+   548→   548→import { PrismaClient } from '@prisma/client';
+   549→   549→
+   550→   550→const prisma = new PrismaClient();
+   551→   551→
+   552→   552→interface OwnershipCost {
+   553→   553→  annualDepreciationPercent: number;
+   554→   554→  annualDepreciationAmount: number;
+   555→   555→  fuelCostAnnual: number;
+   556→   556→  insuranceCostAnnual: number;
+   557→   557→  maintenanceCostAnnual: number;
+   558→   558→  taxCostAnnual: number;
+   559→   559→  totalAnnual: number;
+   560→   560→}
+   561→   561→
+   562→   562→export class CostEstimator {
+   563→   563→  // .env'den parametreler
+   564→   564→  private static readonly FUEL_PRICE_PER_LITER = parseFloat(process.env.FUEL_PRICE_PER_LITER || '40');
+   565→   565→  private static readonly ANNUAL_KM = parseInt(process.env.ANNUAL_KM || '15000');
+   566→   566→  private static readonly INSURANCE_COEFFICIENT = parseFloat(process.env.INSURANCE_COEFFICIENT || '0.02');
+   567→   567→  private static readonly MAINTENANCE_COEFFICIENT = parseFloat(process.env.MAINTENANCE_COEFFICIENT || '0.01');
+   568→   568→  private static readonly TAX_COEFFICIENT = parseFloat(process.env.TAX_COEFFICIENT || '0.005');
+   569→   569→
+   570→   570→  static async updateAllListings(): Promise<void> {
+   571→   571→    const listings = await prisma.listing.findMany({
+   572→   572→      where: { 
+   573→   573→        isActive: true,
+   574→   574→        estimatedValue: { not: null }
+   575→   575→      }
+   576→   576→    });
+   577→   577→
+   578→   578→    for (const listing of listings) {
+   579→   579→      try {
+   580→   580→        const cost = await this.calculateOwnershipCost(listing);
+   581→   581→        
+   582→   582→        await prisma.listing.update({
+   583→   583→          where: { id: listing.id },
+   584→   584→          data: {
+   585→   585→            annualDepreciationPercent: cost.annualDepreciationPercent,
+   586→   586→            annualDepreciationAmount: cost.annualDepreciationAmount,
+   587→   587→            fuelCostAnnual: cost.fuelCostAnnual,
+   588→   588→            insuranceCostAnnual: cost.insuranceCostAnnual,
+   589→   589→            maintenanceCostAnnual: cost.maintenanceCostAnnual,
+   590→   590→            taxCostAnnual: cost.taxCostAnnual,
+   591→   591→            ownershipCostAnnual: cost.totalAnnual
+   592→   592→          }
+   593→   593→        });
+   594→   594→      } catch (error) {
+   595→   595→        console.error(`Error calculating cost for ${listing.id}:`, error);
+   596→   596→      }
+   597→   597→    }
+   598→   598→  }
+   599→   599→
+   600→   600→  private static async calculateOwnershipCost(listing: any): Promise<OwnershipCost> {
+   601→   601→    const estimatedValue = listing.estimatedValue || listing.price;
+   602→   602→    const age = new Date().getFullYear() - listing.year;
+   603→   603→
+   604→   604→    // 1. Değer kaybı (amortisman)
+   605→   605→    const depreciationRate = this.calculateDepreciationRate(listing.make, listing.model, age);
+   606→   606→    const annualDepreciationAmount = estimatedValue * depreciationRate;
+   607→   607→    const annualDepreciationPercent = depreciationRate * 100;
+   608→   608→
+   609→   609→    // 2. Yakıt maliyeti
+   610→   610→    const fuelConsumption = this.estimateFuelConsumption(listing.fuelType, listing.bodyType);
+   611→   611→    const fuelCostAnnual = (this.ANNUAL_KM / 100) * fuelConsumption * this.FUEL_PRICE_PER_LITER;
+   612→   612→
+   613→   613→    // 3. Sigorta maliyeti
+   614→   614→    const insuranceCostAnnual = estimatedValue * this.INSURANCE_COEFFICIENT;
+   615→   615→
+   616→   616→    // 4. Bakım maliyeti
+   617→   617→    const maintenanceCostAnnual = estimatedValue * this.MAINTENANCE_COEFFICIENT;
+   618→   618→
+   619→   619→    // 5. Vergi (MTV) - yaklaşık
+   620→   620→    const taxCostAnnual = this.calculateTax(listing.year, listing.engineVolume || 0);
+   621→   621→
+   622→   622→    const totalAnnual = fuelCostAnnual + insuranceCostAnnual + maintenanceCostAnnual + taxCostAnnual;
+   623→   623→
+   624→   624→    return {
+   625→   625→      annualDepreciationPercent,
+   626→   626→      annualDepreciationAmount,
+   627→   627→      fuelCostAnnual,
+   628→   628→      insuranceCostAnnual,
+   629→   629→      maintenanceCostAnnual,
+   630→   630→      taxCostAnnual,
+   631→   631→      totalAnnual: Math.round(totalAnnual)
+   632→   632→    };
+   633→   633→  }
+   634→   634→
+   635→   635→  private static calculateDepreciationRate(make: string, model: string, age: number): number {
+   636→   636→    // Her marka/model için farklı amortisman oranları
+   637→   637→    const luxuryBrands = ['bmw', 'mercedes-benz', 'audi', 'porsche', 'volvo', 'jaguar'];
+   638→   638→    const economyBrands = ['ford', 'opel', 'renault', 'fiat', 'hyundai', 'kia', 'dacia'];
+   639→   639→    const premiumBrands = ['lexus', 'infiniti', 'acura'];
+   640→   640→
+   641→   641→    let baseRate = 0.08; // yıllık %8
+   642→   642→    
+   643→   643→    if (luxuryBrands.includes(make.toLowerCase())) {
+   644→   644→      baseRate = 0.12; // Lüks markalar daha hızlı değer kaybeder
+   645→   645→    } else if (economyBrands.includes(make.toLowerCase())) {
+   646→   646→      baseRate = 0.10; // Ekonomik markalar
+   647→   647→    } else if (premiumBrands.includes(make.toLowerCase())) {
+   648→   648→      baseRate = 0.09; // Premium markalar
+   649→   649→    }
+   650→   650→
+   651→   651→    // İlk 3 yıl daha hızlı değer kaybı
+   652→   652→    if (age <= 3) {
+   653→   653→      baseRate *= 1.5;
+   654→   654→    } else if (age <= 5) {
+   655→   655→      baseRate *= 1.2;
+   656→   656→    } else if (age > 10) {
+   657→   657→      baseRate *= 0.7; // Yaşlı araçlar daha yavaş değer kaybeder
+   658→   658→    }
+   659→   659→
+   660→   660→    return Math.min(baseRate, 0.35); // Maksimum %35
+   661→   661→  }
+   662→   662→
+   663→   663→  private static estimateFuelConsumption(fuelType: string, bodyType: string): number {
+   664→   664→    // 100 km'de ortalama yakıt tüketimi (litre)
+   665→   665→    const baseConsumption: Record<string, number> = {
+   666→   666→      'petrol': 7.5,
+   667→   667→      'diesel': 5.5,
+   668→   668→      'lpg': 9.5,
+   669→   669→      'electric': 0, // Elektrikli
+   670→   670→      'hybrid': 4.5,
+   671→   671→      'petrol-lpg': 9.0
+   672→   672→    };
+   673→   673→
+   674→   674→    let consumption = baseConsumption[fuelType || 'petrol'] || 7.5;
+   675→   675→
+   676→   676→    // Kasa tipine göre ayarlama
+   677→   677→    const bodyFactors: Record<string, number> = {
+   678→   678→      'sedan': 1.0,
+   679→   679→      'hatchback': 0.95,
+   680→   680→      'suv': 1.2,
+   681→   681→      'pickup': 1.3,
+   682→   682→      'coupe': 1.05,
+   683→   683→      'convertible': 1.1,
+   684→   684→      'station-wagon': 1.05,
+   685→   685→      'minivan': 1.15
+   686→   686→    };
+   687→   687→
+   688→   688→    const factor = bodyFactors[bodyType || 'sedan'] || 1.0;
+   689→   689→    return Math.round((consumption * factor) * 10) / 10;
+   690→   690→  }
+   691→   691→
+   692→   692→  private static calculateTax(year: number, engineVolume: number): number {
+   693→   693→    // 2026 MTV oranları (yaklaşık)
+   694→   694→    const currentYear = new Date().getFullYear();
+   695→   695→    const age = currentYear - year;
+   696→   696→
+   697→   697→    let taxAmount = 0;
+   698→   698→    
+   699→   699→    // Sadece 1499 cc'ye kadar olan araçlar için örnek
+   700→   700→    if (engineVolume <= 1600) {
+   701→   701→      if (age <= 3) taxAmount = 5009;
+   702→   702→      else if (age <= 6) taxAmount = 3756;
+   703→   703→      else if (age <= 11) taxAmount = 2178;
+   704→   704→      else if (age <= 15) taxAmount = 1539;
+   705→   705→      else taxAmount = 591;
+   706→   706→    } else if (engineVolume <= 2000) {
+   707→   707→      // ... 1600-2000 cc için MTV
+   708→   708→      taxAmount = 4000;
+   709→   709→    } else {
+   710→   710→      // ... 2000+ cc için MTV
+   711→   711→      taxAmount = 8000;
+   712→   712→    }
+   713→   713→
+   714→   714→    return taxAmount * 2; // Yılda iki taksit
+   715→   715→  }
+   716→   716→}
+   717→   717→9. ANA SCRAPING JOB (Scheduler)
+   718→   718→typescript
+   719→   719→// apps/scraper/src/scheduler.ts
+   720→   720→
+   721→   721→import cron from 'node-cron';
+   722→   722→import { PrismaClient } from '@prisma/client';
+   723→   723→import { AdapterRegistry } from './registry';
+   724→   724→import { Normalizer } from './normalizer';
+   725→   725→import { Deduplicator } from './deduplicator';
+   726→   726→import { Valuator } from './valuator';
+   727→   727→import { CostEstimator } from './cost_estimator';
+   728→   728→
+   729→   729→const prisma = new PrismaClient();
+   730→   730→
+   731→   731→export class Scheduler {
+   732→   732→  private registry: AdapterRegistry;
+   733→   733→  private isRunning = false;
+   734→   734→
+   735→   735→  constructor() {
+   736→   736→    this.registry = new AdapterRegistry();
+   737→   737→  }
+   738→   738→
+   739→   739→  async start(): Promise<void> {
+   740→   740→    const interval = parseInt(process.env.SCRAPE_INTERVAL_MINUTES || '60');
+   741→   741→    console.log(`Scheduler started, running every ${interval} minutes`);
+   742→   742→
+   743→   743→    // İlk çalıştırmayı hemen yap
+   744→   744→    await this.runScrapeJob();
+   745→   745→
+   746→   746→    // Periyodik çalıştırma
+   747→   747→    cron.schedule(`*/${interval} * * * *`, async () => {
+   748→   748→      await this.runScrapeJob();
+   749→   749→    });
+   750→   750→  }
+   751→   751→
+   752→   752→  async runScrapeJob(): Promise<void> {
+   753→   753→    if (this.isRunning) {
+   754→   754→      console.log('Scrape job already running, skipping...');
+   755→   755→      return;
+   756→   756→    }
+   757→   757→
+   758→   758→    this.isRunning = true;
+   759→   759→    const startTime = Date.now();
+   760→   760→    console.log('Starting scrape job...');
+   761→   761→
+   762→   762→    try {
+   763→   763→      const adapters = this.registry.getAll();
+   764→   764→      let totalListings = 0;
+   765→   765→
+   766→   766→      // Her adapter için sıralı çalıştır
+   767→   767→      for (const adapter of adapters) {
+   768→   768→        const log = await prisma.scrapeLog.create({
+   769→   769→          data: {
+   770→   770→            sourceName: adapter.sourceName,
+   771→   771→            startTime: new Date(),
+   772→   772→            status: 'running'
+   773→   773→          }
+   774→   774→        });
+   775→   775→
+   776→   776→        try {
+   777→   777→          console.log(`Scraping ${adapter.sourceName}...`);
+   778→   778→          const result = await adapter.search({});
+   779→   779→
+   780→   780→          // Normalize et
+   781→   781→          const normalized = result.listings.map(raw => Normalizer.normalize(raw));
+   782→   782→
+   783→   783→          // Veritabanına UPSERT
+   784→   784→          let savedCount = 0;
+   785→   785→          for (const listing of normalized) {
+   786→   786→            try {
+   787→   787→              await prisma.listing.upsert({
+   788→   788→                where: { sourceUrl: listing.sourceUrl },
+   789→   789→                update: {
+   790→   790→                  ...listing,
+   791→   791→                  lastSeenAt: new Date(),
+   792→   792→                  isActive: true,
+   793→   793→                  isDeleted: false
+   794→   794→                },
+   795→   795→                create: {
+   796→   796→                  ...listing,
+   797→   797→                  firstSeenAt: new Date(),
+   798→   798→                  lastSeenAt: new Date(),
+   799→   799→                  isActive: true
+   800→   800→                }
+   801→   801→              });
+   802→   802→              savedCount++;
+   803→   803→            } catch (error) {
+   804→   804→              console.error(`Error saving listing ${listing.sourceUrl}:`, error);
+   805→   805→            }
+   806→   806→          }
+   807→   807→
+   808→   808→          // Pasif ilanları işaretle
+   809→   809→          await this.markInactiveListings(adapter.sourceName, normalized.map(l => l.sourceUrl));
+   810→   810→
+   811→   811→          totalListings += savedCount;
+   812→   812→
+   813→   813→          // Log'u güncelle
+   814→   814→          await prisma.scrapeLog.update({
+   815→   815→            where: { id: log.id },
+   816→   816→            data: {
+   817→   817→              endTime: new Date(),
+   818→   818→              status: 'success',
+   819→   819→              itemsFound: result.totalFound,
+   820→   820→              itemsSaved: savedCount,
+   821→   821→              durationMs: Date.now() - startTime
+   822→   822→            }
+   823→   823→          });
+   824→   824→
+   825→   825→          console.log(`Scraped ${savedCount} listings from ${adapter.sourceName}`);
+   826→   826→
+   827→   827→        } catch (error: any) {
+   828→   828→          console.error(`Error scraping ${adapter.sourceName}:`, error);
+   829→   829→          
+   830→   830→          await prisma.scrapeLog.update({
+   831→   831→            where: { id: log.id },
+   832→   832→            data: {
+   833→   833→              endTime: new Date(),
+   834→   834→              status: 'failed',
+   835→   835→              errorMsg: error.message,
+   836→   836→              durationMs: Date.now() - startTime
+   837→   837→            }
+   838→   838→          });
+   839→   839→        }
+   840→   840→      }
+   841→   841→
+   842→   842→      // Değerleme ve fırsat etiketlerini hesapla
+   843→   843→      console.log('Updating valuations...');
+   844→   844→      await Valuator.updateAllListings();
+   845→   845→
+   846→   846→      console.log('Updating cost estimates...');
+   847→   847→      await CostEstimator.updateAllListings();
+   848→   848→
+   849→   849→      console.log(`Scrape job completed in ${Date.now() - startTime}ms. Total listings: ${totalListings}`);
+   850→   850→
+   851→   851→    } catch (error) {
+   852→   852→      console.error('Scrape job failed:', error);
+   853→   853→    } finally {
+   854→   854→      this.isRunning = false;
+   855→   855→    }
+   856→   856→  }
+   857→   857→
+   858→   858→  private async markInactiveListings(sourceName: string, activeUrls: string[]): Promise<void> {
+   859→   859→    // Kaynakta artık bulunmayan ilanları pasif yap
+   860→   860→    await prisma.listing.updateMany({
+   861→   861→      where: {
+   862→   862→        sourceName: sourceName,
+   863→   863→        sourceUrl: { notIn: activeUrls },
+   864→   864→        isActive: true
+   865→   865→      },
+   866→   866→      data: {
+   867→   867→        isActive: false,
+   868→   868→        isDeleted: true
+   869→   869→      }
+   870→   870→    });
+   871→   871→  }
+   872→   872→
+   873→   873→  // Admin token ile manuel tetikleme
+   874→   874→  async manualTrigger(): Promise<void> {
+   875→   875→    console.log('Manual scrape trigger received');
+   876→   876→    await this.runScrapeJob();
+   877→   877→  }
+   878→   878→}
+   879→   879→10. API ENDPOINT'LERİ (Kullanıcıya Açık - SADECE DB OKUR!)
+   880→   880→typescript
+   881→   881→// apps/web/src/app/api/search/route.ts
+   882→   882→
+   883→   883→import { NextRequest, NextResponse } from 'next/server';
+   884→   884→import { PrismaClient } from '@prisma/client';
+   885→   885→import { redis, getCached, setCached } from '@/lib/cache';
+   886→   886→
+   887→   887→const prisma = new PrismaClient();
+   888→   888→
+   889→   889→export async function GET(request: NextRequest) {
+   890→   890→  // ⚠️ BU API UÇU SADECE VERİTABANINDAN OKUR, HİÇBİR SCRAPING ÇAĞRISI YOK!
+   891→   891→  const searchParams = request.nextUrl.searchParams;
+   892→   892→  
+   893→   893→  const where: any = { isActive: true };
+   894→   894→  
+   895→   895→  // Filtreler
+   896→   896→  if (searchParams.has('make')) {
+   897→   897→    where.make = searchParams.get('make');
+   898→   898→  }
+   899→   899→  if (searchParams.has('model')) {
+   900→   900→    where.model = searchParams.get('model');
+   901→   901→  }
+   902→   902→  if (searchParams.has('yearMin') || searchParams.has('yearMax')) {
+   903→   903→    where.year = {};
+   904→   904→    if (searchParams.has('yearMin')) {
+   905→   905→      where.year.gte = parseInt(searchParams.get('yearMin')!);
+   906→   906→    }
+   907→   907→    if (searchParams.has('yearMax')) {
+   908→   908→      where.year.lte = parseInt(searchParams.get('yearMax')!);
+   909→   909→    }
+   910→   910→  }
+   911→   911→  if (searchParams.has('priceMin') || searchParams.has('priceMax')) {
+   912→   912→    where.price = {};
+   913→   913→    if (searchParams.has('priceMin')) {
+   914→   914→      where.price.gte = parseFloat(searchParams.get('priceMin')!);
+   915→   915→    }
+   916→   916→    if (searchParams.has('priceMax')) {
+   917→   917→      where.price.lte = parseFloat(searchParams.get('priceMax')!);
+   918→   918→    }
+   919→   919→  }
+   920→   920→  if (searchParams.has('fuelType')) {
+   921→   921→    where.fuelType = searchParams.get('fuelType');
+   922→   922→  }
+   923→   923→  if (searchParams.has('transmission')) {
+   924→   924→    where.transmission = searchParams.get('transmission');
+   925→   925→  }
+   926→   926→  if (searchParams.has('city')) {
+   927→   927→    where.city = searchParams.get('city');
+   928→   928→  }
+   929→   929→  if (searchParams.has('dealTag')) {
+   930→   930→    where.dealTag = searchParams.get('dealTag');
+   931→   931→  }
+   932→   932→  if (searchParams.has('mileageMax')) {
+   933→   933→    where.mileageKm = { lte: parseInt(searchParams.get('mileageMax')!) };
+   934→   934→  }
+   935→   935→
+   936→   936→  // Sıralama
+   937→   937→  const sortField = searchParams.get('sort') || 'price';
+   938→   938→  const sortOrder = searchParams.get('order') || 'asc';
+   939→   939→  
+   940→   940→  let orderBy: any = {};
+   941→   941→  switch (sortField) {
+   942→   942→    case 'price':
+   943→   943→      orderBy = { price: sortOrder };
+   944→   944→      break;
+   945→   945→    case 'dealScore':
+   946→   946→      orderBy = { dealScore: sortOrder };
+   947→   947→      break;
+   948→   948→    case 'mileage':
+   949→   949→      orderBy = { mileageKm: sortOrder };
+   950→   950→      break;
+   951→   951→    case 'year':
+   952→   952→      orderBy = { year: sortOrder };
+   953→   953→      break;
+   954→   954→    case 'newest':
+   955→   955→      orderBy = { firstSeenAt: 'desc' };
+   956→   956→      break;
+   957→   957→    default:
+   958→   958→      orderBy = { price: 'asc' };
+   959→   959→  }
+   960→   960→
+   961→   961→  // Sayfalama
+   962→   962→  const page = parseInt(searchParams.get('page') || '1');
+   963→   963→  const limit = parseInt(searchParams.get('limit') || '20');
+   964→   964→  const skip = (page - 1) * limit;
+   965→   965→
+   966→   966→  // Cache key
+   967→   967→  const cacheKey = `search:${request.url}`;
+   968→   968→  
+   969→   969→  // Cache kontrolü
+   970→   970→  const cached = await getCached(cacheKey);
+   971→   971→  if (cached) {
+   972→   972→    return NextResponse.json(cached, {
+   973→   973→      headers: {
+   974→   974→        'Cache-Control': `public, max-age=${process.env.CACHE_TTL_SECONDS || 300}`
+   975→   975→      }
+   976→   976→    });
+   977→   977→  }
+   978→   978→
+   979→   979→  // Veritabanı sorgusu
+   980→   980→  const [listings, total] = await Promise.all([
+   981→   981→    prisma.listing.findMany({
+   982→   982→      where,
+   983→   983→      skip,
+   984→   984→      take: limit,
+   985→   985→      orderBy,
+   986→   986→      include: {
+   987→   987→        priceHistory: {
+   988→   988→          orderBy: { recordedAt: 'desc' },
+   989→   989→          take: 5
+   990→   990→        }
+   991→   991→      }
+   992→   992→    }),
+   993→   993→    prisma.listing.count({ where })
+   994→   994→  ]);
+   995→   995→
+   996→   996→  const result = {
+   997→   997→    data: listings,
+   998→   998→    pagination: {
+   999→   999→      page,
+  1000→  1000→      limit,
+  1001→  1001→      total,
+  1002→  1002→      totalPages: Math.ceil(total / limit)
+  1003→  1003→    },
+  1004→  1004→    filters: Object.fromEntries(searchParams.entries())
+  1005→  1005→  };
+  1006→  1006→
+  1007→  1007→  // Cache'e kaydet
+  1008→  1008→  await setCached(cacheKey, result, parseInt(process.env.CACHE_TTL_SECONDS || '300'));
+  1009→  1009→
+  1010→  1010→  return NextResponse.json(result, {
+  1011→  1011→    headers: {
+  1012→  1012→      'Cache-Control': `public, max-age=${process.env.CACHE_TTL_SECONDS || 300}`
+  1013→  1013→    }
+  1014→  1014→  });
+  1015→  1015→}
+  1016→  1016→10.1. Listing Detay API'si
+  1017→  1017→typescript
+  1018→  1018→// apps/web/src/app/api/listing/[id]/route.ts
+  1019→  1019→
+  1020→  1020→import { NextRequest, NextResponse } from 'next/server';
+  1021→  1021→import { PrismaClient } from '@prisma/client';
+  1022→  1022→import { redis, getCached, setCached } from '@/lib/cache';
+  1023→  1023→
+  1024→  1024→const prisma = new PrismaClient();
+  1025→  1025→
+  1026→  1026→export async function GET(
+  1027→  1027→  request: NextRequest,
+  1028→  1028→  { params }: { params: { id: string } }
+  1029→  1029→) {
+  1030→  1030→  // ⚠️ BU API UÇU SADECE VERİTABANINDAN OKUR!
+  1031→  1031→  const cacheKey = `listing:${params.id}`;
+  1032→  1032→  
+  1033→  1033→  // Cache kontrolü
+  1034→  1034→  const cached = await getCached(cacheKey);
+  1035→  1035→  if (cached) {
+  1036→  1036→    return NextResponse.json(cached, {
+  1037→  1037→      headers: {
+  1038→  1038→        'Cache-Control': `public, max-age=${process.env.CACHE_TTL_SECONDS || 300}`
+  1039→  1039→      }
+  1040→  1040→    });
+  1041→  1041→  }
+  1042→  1042→
+  1043→  1043→  const listing = await prisma.listing.findUnique({
+  1044→  1044→    where: { id: params.id },
+  1045→  1045→    include: {
+  1046→  1046→      priceHistory: {
+  1047→  1047→        orderBy: { recordedAt: 'desc' },
+  1048→  1048→        take: 30
+  1049→  1049→      }
+  1050→  1050→    }
+  1051→  1051→  });
+  1052→  1052→
+  1053→  1053→  if (!listing) {
+  1054→  1054→    return NextResponse.json({ error: 'Listing not found' }, { status: 404 });
+  1055→  1055→  }
+  1056→  1056→
+  1057→  1057→  // Aynı duplicate group'taki diğer ilanları bul
+  1058→  1058→  let duplicateListings: any[] = [];
+  1059→  1059→  if (listing.duplicateGroupId) {
+  1060→  1060→    const group = await prisma.duplicateGroup.findFirst({
+  1061→  1061→      where: { id: listing.duplicateGroupId }
+  1062→  1062→    });
+  1063→  1063→    if (group) {
+  1064→  1064→      duplicateListings = await prisma.listing.findMany({
+  1065→  1065→        where: {
+  1066→  1066→          id: { in: group.listingIds },
+  1067→  1067→          id: { not: listing.id },
+  1068→  1068→          isActive: true
+  1069→  1069→        }
+  1070→  1070→      });
+  1071→  1071→    }
+  1072→  1072→  }
+  1073→  1073→
+  1074→  1074→  const result = {
+  1075→  1075→    ...listing,
+  1076→  1076→    duplicateListings,
+  1077→  1077→    priceHistory: listing.priceHistory
+  1078→  1078→  };
+  1079→  1079→
+  1080→  1080→  // Cache'e kaydet
+  1081→  1081→  await setCached(cacheKey, result, parseInt(process.env.CACHE_TTL_SECONDS || '300'));
+  1082→  1082→
+  1083→  1083→  return NextResponse.json(result, {
+  1084→  1084→    headers: {
+  1085→  1085→      'Cache-Control': `public, max-age=${process.env.CACHE_TTL_SECONDS || 300}`
+  1086→  1086→    }
+  1087→  1087→  });
+  1088→  1088→}
+  1089→  1089→10.2. Admin Scrape Tetikleme
+  1090→  1090→typescript
+  1091→  1091→// apps/web/src/app/api/admin/scrape/route.ts
+  1092→  1092→
+  1093→  1093→import { NextRequest, NextResponse } from 'next/server';
+  1094→  1094→import { spawn } from 'child_process';
+  1095→  1095→import path from 'path';
+  1096→  1096→
+  1097→  1097→const ADMIN_TOKEN = process.env.ADMIN_TOKEN;
+  1098→  1098→
+  1099→  1099→export async function POST(request: NextRequest) {
+  1100→  1100→  // Token kontrolü
+  1101→  1101→  const authHeader = request.headers.get('authorization');
+  1102→  1102→  if (!authHeader || !authHeader.startsWith('Bearer ') || authHeader.split(' ')[1] !== ADMIN_TOKEN) {
+  1103→  1103→    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  1104→  1104→  }
+  1105→  1105→
+  1106→  1106→  // Scraping job'u arka planda başlat
+  1107→  1107→  const scraperPath = path.join(process.cwd(), '..', 'scraper', 'dist', 'index.js');
+  1108→  1108→  const child = spawn('node', [scraperPath, '--manual'], {
+  1109→  1109→    detached: true,
+  1110→  1110→    stdio: 'ignore'
+  1111→  1111→  });
+  1112→  1112→  child.unref();
+  1113→  1113→
+  1114→  1114→  return NextResponse.json({
+  1115→  1115→    success: true,
+  1116→  1116→    message: 'Scrape job started in background'
+  1117→  1117→  });
+  1118→  1118→}
+  1119→  1119→11. CACHE YÖNETİMİ
+  1120→  1120→typescript
+  1121→  1121→// apps/web/src/lib/cache.ts
+  1122→  1122→
+  1123→  1123→import Redis from 'ioredis';
+  1124→  1124→
+  1125→  1125→const redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
+  1126→  1126→
+  1127→  1127→interface CacheStats {
+  1128→  1128→  hits: number;
+  1129→  1129→  misses: number;
+  1130→  1130→  keys: number;
+  1131→  1131→}
+  1132→  1132→
+  1133→  1133→let stats: CacheStats = {
+  1134→  1134→  hits: 0,
+  1135→  1135→  misses: 0,
+  1136→  1136→  keys: 0
+  1137→  1137→};
+  1138→  1138→
+  1139→  1139→export async function getCached<T>(key: string): Promise<T | null> {
+  1140→  1140→  try {
+  1141→  1141→    const data = await redis.get(key);
+  1142→  1142→    if (data) {
+  1143→  1143→      stats.hits++;
+  1144→  1144→      return JSON.parse(data);
+  1145→  1145→    }
+  1146→  1146→    stats.misses++;
+  1147→  1147→    return null;
+  1148→  1148→  } catch (error) {
+  1149→  1149→    console.error('Cache get error:', error);
+  1150→  1150→    return null;
+  1151→  1151→  }
+  1152→  1152→}
+  1153→  1153→
+  1154→  1154→export async function setCached(key: string, value: any, ttlSeconds: number): Promise<void> {
+  1155→  1155→  try {
+  1156→  1156→    await redis.set(key, JSON.stringify(value), 'EX', ttlSeconds);
+  1157→  1157→    stats.keys++;
+  1158→  1158→  } catch (error) {
+  1159→  1159→    console.error('Cache set error:', error);
+  1160→  1160→  }
+  1161→  1161→}
+  1162→  1162→
+  1163→  1163→export async function invalidateCache(pattern: string): Promise<void> {
+  1164→  1164→  try {
+  1165→  1165→    const keys = await redis.keys(pattern);
+  1166→  1166→    if (keys.length > 0) {
+  1167→  1167→      await redis.del(...keys);
+  1168→  1168→    }
+  1169→  1169→  } catch (error) {
+  1170→  1170→    console.error('Cache invalidate error:', error);
+  1171→  1171→  }
+  1172→  1172→}
+  1173→  1173→
+  1174→  1174→export function getCacheStats(): CacheStats {
+  1175→  1175→  return { ...stats };
+  1176→  1176→}
+  1177→  1177→
+  1178→  1178→// Cache-Control helper for API routes
+  1179→  1179→export function getCacheHeaders(ttlSeconds: number): HeadersInit {
+  1180→  1180→  return {
+  1181→  1181→    'Cache-Control': `public, max-age=${ttlSeconds}, stale-while-revalidate=${ttlSeconds * 2}`
+  1182→  1182→  };
+  1183→  1183→}
+  1184→  1184→12. DOCKER COMPOSE
+  1185→  1185→yaml
+  1186→  1186→# docker-compose.yml
+  1187→  1187→
+  1188→  1188→version: '3.8'
+  1189→  1189→
+  1190→  1190→services:
+  1191→  1191→  postgres:
+  1192→  1192→    image: postgres:15-alpine
+  1193→  1193→    environment:
+  1194→  1194→      POSTGRES_USER: postgres
+  1195→  1195→      POSTGRES_PASSWORD: postgres
+  1196→  1196→      POSTGRES_DB: car_aggregator
+  1197→  1197→    ports:
+  1198→  1198→      - "5432:5432"
+  1199→  1199→    volumes:
+  1200→  1200→      - postgres_data:/var/lib/postgresql/data
+  1201→  1201→    healthcheck:
+  1202→  1202→      test: ["CMD-SHELL", "pg_isready -U postgres"]
+  1203→  1203→      interval: 10s
+  1204→  1204→      timeout: 5s
+  1205→  1205→      retries: 5
+  1206→  1206→
+  1207→  1207→  redis:
+  1208→  1208→    image: redis:7-alpine
+  1209→  1209→    ports:
+  1210→  1210→      - "6379:6379"
+  1211→  1211→    volumes:
+  1212→  1212→      - redis_data:/data
+  1213→  1213→    healthcheck:
+  1214→  1214→      test: ["CMD", "redis-cli", "ping"]
+  1215→  1215→      interval: 10s
+  1216→  1216→      timeout: 5s
+  1217→  1217→      retries: 5
+  1218→  1218→
+  1219→  1219→  caddy:
+  1220→  1220→    image: caddy:2-alpine
+  1221→  1221→    ports:
+  1222→  1222→      - "80:80"
+  1223→  1223→      - "443:443"
+  1224→  1224→    volumes:
+  1225→  1225→      - ./Caddyfile:/etc/caddy/Caddyfile
+  1226→  1226→      - caddy_data:/data
+  1227→  1227→      - caddy_config:/config
+  1228→  1228→    depends_on:
+  1229→  1229→      - web
+  1230→  1230→
+  1231→  1231→  web:
+  1232→  1232→    build:
+  1233→  1233→      context: ./apps/web
+  1234→  1234→      dockerfile: Dockerfile
+  1235→  1235→    environment:
+  1236→  1236→      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/car_aggregator
+  1237→  1237→      REDIS_URL: redis://redis:6379
+  1238→  1238→      ADMIN_TOKEN: ${ADMIN_TOKEN}
+  1239→  1239→      CACHE_TTL_SECONDS: ${CACHE_TTL_SECONDS:-300}
+  1240→  1240→    ports:
+  1241→  1241→      - "3000:3000"
+  1242→  1242→    depends_on:
+  1243→  1243→      postgres:
+  1244→  1244→        condition: service_healthy
+  1245→  1245→      redis:
+  1246→  1246→        condition: service_healthy
+  1247→  1247→    volumes:
+  1248→  1248→      - ./apps/web:/app
+  1249→  1249→      - /app/node_modules
+  1250→  1250→      - /app/.next
+  1251→  1251→
+  1252→  1252→  scraper:
+  1253→  1253→    build:
+  1254→  1254→      context: ./apps/scraper
+  1255→  1255→      dockerfile: Dockerfile
+  1256→  1256→    environment:
+  1257→  1257→      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/car_aggregator
+  1258→  1258→      REDIS_URL: redis://redis:6379
+  1259→  1259→      SCRAPE_INTERVAL_MINUTES: ${SCRAPE_INTERVAL_MINUTES:-60}
+  1260→  1260→      SCRAPE_DELAY_SECONDS: ${SCRAPE_DELAY_SECONDS:-3}
+  1261→  1261→      SCRAPE_CONCURRENCY: ${SCRAPE_CONCURRENCY:-3}
+  1262→  1262→      USE_PROXY: ${USE_PROXY:-false}
+  1263→  1263→      PROXY_HOST: ${PROXY_HOST:-localhost}
+  1264→  1264→      PROXY_PORT: ${PROXY_PORT:-8080}
+  1265→  1265→      PROXY_USERNAME: ${PROXY_USERNAME:-}
+  1266→  1266→      PROXY_PASSWORD: ${PROXY_PASSWORD:-}
+  1267→  1267→      # Cost estimation parameters
+  1268→  1268→      FUEL_PRICE_PER_LITER: ${FUEL_PRICE_PER_LITER:-40}
+  1269→  1269→      ANNUAL_KM: ${ANNUAL_KM:-15000}
+  1270→  1270→      INSURANCE_COEFFICIENT: ${INSURANCE_COEFFICIENT:-0.02}
+  1271→  1271→      MAINTENANCE_COEFFICIENT: ${MAINTENANCE_COEFFICIENT:-0.01}
+  1272→  1272→      TAX_COEFFICIENT: ${TAX_COEFFICIENT:-0.005}
+  1273→  1273→    depends_on:
+  1274→  1274→      postgres:
+  1275→  1275→        condition: service_healthy
+  1276→  1276→      redis:
+  1277→  1277→        condition: service_healthy
+  1278→  1278→    volumes:
+  1279→  1279→      - ./apps/scraper:/app
+  1280→  1280→      - /app/node_modules
+  1281→  1281→    restart: unless-stopped
+  1282→  1282→
+  1283→  1283→volumes:
+  1284→  1284→  postgres_data:
+  1285→  1285→  redis_data:
+  1286→  1286→  caddy_data:
+  1287→  1287→  caddy_config:
+  1288→  1288→13. ENV ÖRNEĞİ
+  1289→  1289→env
+  1290→  1290→# .env.example
+  1291→  1291→
+  1292→  1292→# Database
+  1293→  1293→DATABASE_URL=postgresql://postgres:postgres@postgres:5432/car_aggregator
+  1294→  1294→
+  1295→  1295→# Redis
+  1296→  1296→REDIS_URL=redis://redis:6379
+  1297→  1297→
+  1298→  1298→# Scraper Settings
+  1299→  1299→SCRAPE_INTERVAL_MINUTES=60
+  1300→  1300→SCRAPE_DELAY_SECONDS=3
+  1301→  1301→SCRAPE_CONCURRENCY=3
+  1302→  1302→
+  1303→  1303→# Cache
+  1304→  1304→CACHE_TTL_SECONDS=300
+  1305→  1305→
+  1306→  1306→# Admin Token (generate with: openssl rand -base64 32)
+  1307→  1307→ADMIN_TOKEN=your-secure-admin-token-here
+  1308→  1308→
+  1309→  1309→# Proxy Settings (optional)
+  1310→  1310→USE_PROXY=false
+  1311→  1311→PROXY_HOST=localhost
+  1312→  1312→PROXY_PORT=8080
+  1313→  1313→PROXY_USERNAME=
+  1314→  1314→PROXY_PASSWORD=
+  1315→  1315→
+  1316→  1316→# Cost Estimation Parameters
+  1317→  1317→FUEL_PRICE_PER_LITER=40
+  1318→  1318→ANNUAL_KM=15000
+  1319→  1319→INSURANCE_COEFFICIENT=0.02
+  1320→  1320→MAINTENANCE_COEFFICIENT=0.01
+  1321→  1321→TAX_COEFFICIENT=0.005
+  1322→  1322→
+  1323→  1323→# Node Environment
+  1324→  1324→NODE_ENV=production
+  1325→  1325→14. README İÇERİĞİ
+  1326→  1326→markdown
+  1327→  1327→# Türkiye 2. El Araç İlanları Aggregator
+  1328→  1328→
+  1329→  1329→## Proje Hakkında
+  1330→  1330→
+  1331→  1331→Bu proje, Türkiye'deki 14 farklı ikinci el araç platformundan ilanları toplayan, değerleyen ve fırsatları analiz eden bir meta-arama aggregator platformudur.
+  1332→  1332→
+  1333→  1333→### Özellikler
+  1334→  1334→
+  1335→  1335→- **Meta-Arama:** Sahibinden, Arabam, Letgo, VavaCars, Carvak, Otokoç, Dod, Spoticar, Garenta, Avis, Sixt, Pertdunyasi, Hasarliaraba, Tasit.com
+  1336→  1336→- **Değerleme:** Comparables yöntemiyle adil piyasa değeri tahmini
+  1337→  1337→- **Fırsat Skoru:** Harika Fırsat, İyi Fiyat, Piyasa Fiyatı, Piyasa Üstü, Pahalı etiketleri
+  1338→  1338→- **Sahip Olma Maliyeti:** Değer kaybı, yakıt, sigorta, bakım, vergi tahminleri
+  1339→  1339→- **Fiyat Geçmişi:** İlan fiyat değişimlerinin takibi
+  1340→  1340→- **Çapraz-Kaynak Tekilleştirme:** Aynı aracın farklı sitelerdeki ilanlarını gruplama
+  1341→  1341→
+  1342→  1342→## Teknoloji Yığını
+  1343→  1343→
+  1344→  1344→- **Backend & API:** Next.js 14+ (App Router) + TypeScript
+  1345→  1345→- **Veritabanı:** PostgreSQL 15 (Prisma ORM)
+  1346→  1346→- **Cache:** Redis 7
+  1347→  1347→- **Scraping:** Node.js + TypeScript + Cheerio + Axios
+  1348→  1348→- **Container:** Docker Compose
+  1349→  1349→- **Reverse Proxy:** Caddy 2
+  1350→  1350→
+  1351→  1351→## Mimari
+  1352→  1352→
+  1353→  1353→### Veri Akışı
+  1354→  1354→[Scheduler] -> [Adapter'lar] -> [Normalize] -> [Dedup] -> [PostgreSQL UPSERT]
+  1355→  1355→↓
+  1356→  1356→[Valuator] -> [CostEstimator] -> [DealScorer] -> [PostgreSQL Güncelle]
+  1357→  1357→↓
+  1358→  1358→[Kullanıcı] -> [API] -> [Redis Cache] -> Miss -> [PostgreSQL] -> Cache'le
+  1359→  1359→
+  1360→  1360→text
+  1361→  1361→
+  1362→  1362→### Mimarik Kural
+  1363→  1363→
+  1364→  1364→**Scraping KESİNLİKLE kullanıcı isteğiyle tetiklenmez!**
+  1365→  1365→
+  1366→  1366→- Tüm scraping işlemleri zamanlanmış job'lar ile yapılır
+  1367→  1367→- Kullanıcıya açık API'ler SADECE veritabanından okur
+  1368→  1368→- Scraping servisi ayrı bir container'da çalışır
+  1369→  1369→
+  1370→  1370→## Kurulum
+  1371→  1371→
+  1372→  1372→### 1. Gereksinimler
+  1373→  1373→
+  1374→  1374→- Node.js 18+
+  1375→  1375→- Docker & Docker Compose
+  1376→  1376→- PostgreSQL 15
+  1377→  1377→- Redis 7
+  1378→  1378→
+  1379→  1379→### 2. Projeyi Klonlayın
+  1380→  1380→
+  1381→  1381→```bash
+  1382→  1382→git clone <repository-url>
+  1383→  1383→cd car-aggregator
+  1384→  1384→3. Environment Ayarları
+  1385→  1385→bash
+  1386→  1386→cp .env.example .env
+  1387→  1387→# .env dosyasını düzenleyin
+  1388→  1388→4. Bağımlılıkları Yükleyin
+  1389→  1389→bash
+  1390→  1390→# Web uygulaması
+  1391→  1391→cd apps/web
+  1392→  1392→npm install
+  1393→  1393→
+  1394→  1394→# Scraper
+  1395→  1395→cd ../scraper
+  1396→  1396→npm install
+  1397→  1397→5. Veritabanı Migration
+  1398→  1398→bash
+  1399→  1399→cd apps/web
+  1400→  1400→npx prisma migrate dev --name init
+  1401→  1401→npx prisma generate
+  1402→  1402→6. Docker ile Çalıştırma
+  1403→  1403→bash
+  1404→  1404→docker-compose up -d
+  1405→  1405→7. Geliştirme Modunda Çalıştırma
+  1406→  1406→bash
+  1407→  1407→# Web uygulaması
+  1408→  1408→cd apps/web
+  1409→  1409→npm run dev
+  1410→  1410→
+  1411→  1411→# Scraper
+  1412→  1412→cd apps/scraper
+  1413→  1413→npm run dev
+  1414→  1414→API Dokümantasyonu
+  1415→  1415→GET /api/search
+  1416→  1416→Arama ve filtreleme
+  1417→  1417→
+  1418→  1418→Query Parameters:
+  1419→  1419→
+  1420→  1420→make - Marka
+  1421→  1421→
+  1422→  1422→model - Model
+  1423→  1423→
+  1424→  1424→yearMin - Minimum yıl
+  1425→  1425→
+  1426→  1426→yearMax - Maksimum yıl
+  1427→  1427→
+  1428→  1428→priceMin - Minimum fiyat
+  1429→  1429→
+  1430→  1430→priceMax - Maksimum fiyat
+  1431→  1431→
+  1432→  1432→fuelType - Yakıt tipi
+  1433→  1433→
+  1434→  1434→transmission - Vites tipi
+  1435→  1435→
+  1436→  1436→city - Şehir
+  1437→  1437→
+  1438→  1438→dealTag - Fırsat etiketi
+  1439→  1439→
+  1440→  1440→sort - Sıralama alanı (price, dealScore, year, mileage, newest)
+  1441→  1441→
+  1442→  1442→order - Sıralama yönü (asc, desc)
+  1443→  1443→
+  1444→  1444→page - Sayfa numarası
+  1445→  1445→
+  1446→  1446→limit - Sayfa başına sonuç
+  1447→  1447→
+  1448→  1448→GET /api/listing/{id}
+  1449→  1449→İlan detayı
+  1450→  1450→
+  1451→  1451→Response:
+  1452→  1452→
+  1453→  1453→İlan bilgileri
+  1454→  1454→
+  1455→  1455→Fiyat geçmişi
+  1456→  1456→
+  1457→  1457→Değerleme
+  1458→  1458→
+  1459→  1459→Fırsat etiketi
+  1460→  1460→
+  1461→  1461→Sahip olma maliyeti
+  1462→  1462→
+  1463→  1463→Diğer sitelerdeki aynı araç ilanları
+  1464→  1464→
+  1465→  1465→POST /api/admin/scrape
+  1466→  1466→Manuel scraping tetikleme (admin token gerekli)
+  1467→  1467→
+  1468→  1468→Yeni Kaynak (Adapter) Ekleme
+  1469→  1469→apps/scraper/src/adapters/ klasöründe yeni bir dosya oluşturun
+  1470→  1470→
+  1471→  1471→BaseAdapter sınıfını extend edin
+  1472→  1472→
+  1473→  1473→Aşağıdaki metodları implemente edin:
+  1474→  1474→
+  1475→  1475→search(filters: SearchFilters): Promise<AdapterResult>
+  1476→  1476→
+  1477→  1477→parseListing(raw: any): ListingRaw
+  1478→  1478→
+  1479→  1479→getDetail(listingId: string): Promise<ListingRaw | null>
+  1480→  1480→
+  1481→  1481→apps/scraper/src/registry.ts dosyasında adapter'ı kaydedin
+  1482→  1482→
+  1483→  1483→Adapter Örneği
+  1484→  1484→typescript
+  1485→  1485→// apps/scraper/src/adapters/new-site.ts
+  1486→  1486→import { BaseAdapter, SearchFilters, ListingRaw, AdapterResult } from './base';
+  1487→  1487→
+  1488→  1488→export class NewSiteAdapter extends BaseAdapter {
+  1489→  1489→  sourceName = 'new-site.com';
+  1490→  1490→  baseUrl = 'https://www.new-site.com';
+  1491→  1491→  defaultDelay = 2000;
+  1492→  1492→  maxConcurrency = 2;
+  1493→  1493→
+  1494→  1494→  async search(filters: SearchFilters): Promise<AdapterResult> {
+  1495→  1495→    // Implement search logic
+  1496→  1496→  }
+  1497→  1497→
+  1498→  1498→  parseListing(raw: any): ListingRaw {
+  1499→  1499→    // Implement parse logic
+  1500→  1500→  }
+  1501→  1501→
+  1502→  1502→  async getDetail(listingId: string): Promise<ListingRaw | null> {
+  1503→  1503→    // Implement detail fetch
+  1504→  1504→  }
+  1505→  1505→}
+  1506→  1506→Değerleme Nasıl Çalışır?
+  1507→  1507→Comparables Toplama: Aynı make+model, year ±1, aynı fuel ve transmission
+  1508→  1508→
+  1509→  1509→Medyan Fiyat: Örneklemin medyan fiyatı
+  1510→  1510→
+  1511→  1511→Km Düzeltmesi: Basit lineer regresyon ile km farkını fiyata yansıt
+  1512→  1512→
+  1513→  1513→Confidence: Örneklem büyüklüğüne göre high/medium/low/insufficient
+  1514→  1514→
+  1515→  1515→Deal Score: (price - estimatedValue) / estimatedValue
+  1516→  1516→
+  1517→  1517→Etiket: Skora göre Harika Fırsat, İyi Fiyat, Piyasa Fiyatı, Piyasa Üstü, Pahalı
+  1518→  1518→
+  1519→  1519→Scraping Politikaları
+  1520→  1520→Rate Limiting: Kaynak başına dakikada max 10 istek
+  1521→  1521→
+  1522→  1522→User-Agent: Gerçek tarayıcı User-Agent'ları döndür
+  1523→  1523→
+  1524→  1524→Delay: Her istek arasında random 2-5 saniye bekle
+  1525→  1525→
+  1526→  1526→Proxy Desteği: İsteğe bağlı proxy havuzu kullanımı
+  1527→  1527→
+  1528→  1528→Robots.txt: Kontrol edilir ve uyulur
+  1529→  1529→
+  1530→  1530→Hata Yönetimi: Retry mekanizması, hata izolasyonu
+  1531→  1531→
+  1532→  1532→Performans & Optimizasyon
+  1533→  1533→Redis Cache: API yanıtları 5 dakika cache'lenir
+  1534→  1534→
+  1535→  1535→Database Indexes: Sık kullanılan filtreler için index
+  1536→  1536→
+  1537→  1537→Batch Processing: Toplu UPSERT işlemleri
+  1538→  1538→
+  1539→  1539→Concurrency Control: Scraping işlemleri paralel sınırlı
+  1540→  1540→
+  1541→  1541→Production Deployment
+  1542→  1542→bash
+  1543→  1543→# Docker Compose ile tüm servisleri başlat
+  1544→  1544→docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+  1545→  1545→
+  1546→  1546→# Scaling scraper workers
+  1547→  1547→docker-compose up -d --scale scraper=3
+  1548→  1548→Monitoring
+  1549→  1549→Scrape Logs: Her scraping işlemi loglanır
+  1550→  1550→
+  1551→  1551→Cache Stats: Cache hit/miss oranları
+  1552→  1552→
+  1553→  1553→Error Tracking: Hatalar loglanır ve takip edilir
+  1554→  1554→
+  1555→  1555→Lisans
+  1556→  1556→Copyright © 2026 - Tüm hakları saklıdır.
+  1557→  1557→
+  1558→  1558→text
+  1559→  1559→
+  1560→  1560→---
+  1561→  1561→
+  1562→  1562→## 15. ÖNEMLİ UYARILAR VE EN İYİ UYGULAMALAR
+  1563→  1563→
+  1564→  1564→### 15.1. Scraping Etik Kuralları
+  1565→  1565→
+  1566→  1566→1. **Robots.txt Kontrolü:** Her adapter, hedef sitenin `robots.txt` dosyasını kontrol etmeli ve yasaklanmış alanlara istek atmamalı.
+  1567→  1567→2. **Rate Limiting:** Dakikada belirli sayıda istek sınırı aşılmamalı (öneri: 10-20 istek/dakika).
+  1568→  1568→3. **İş Saatleri Dışı:** Scraping işlemleri tercihen gece saatlerinde (02:00-06:00) yapılmalı.
+  1569→  1569→4. **User-Agent:** Gerçek bir tarayıcı gibi görünmek için güncel User-Agent kullanılmalı.
+  1570→  1570→5. **Bot Bildirimi:** Mümkünse sitelere scraping yapıldığı bildirilmeli.
+  1571→  1571→
+  1572→  1572→### 15.2. IP Blokajını Önleme
+  1573→  1573→
+  1574→  1574→1. **Rotating Proxies:** Her istek için farklı IP adresi kullanın.
+  1575→  1575→2. **Residential Proxies:** Veri merkezi proxy'leri yerine residential proxy'ler tercih edin.
+  1576→  1576→3. **Random Delays:** İstekler arasında random gecikmeler ekleyin.
+  1577→  1577→4. **Session Rotation:** Cookie ve session'ları düzenli olarak yenileyin.
+  1578→  1578→5. **User-Agent Rotation:** Her istekte farklı User-Agent kullanın.
+  1579→  1579→
+  1580→  1580→### 15.3. Veri Kalitesi
+  1581→  1581→
+  1582→  1582→1. **Validation:** Her ilan verisi doğrulanmalı (fiyat > 0, yıl geçerli, vb.).
+  1583→  1583→2. **Dedup:** Aynı ilan birden fazla kez toplanmamalı.
+  1584→  1584→3. **Normalization:** Tüm veriler ortak formata dönüştürülmeli.
+  1585→  1585→4. **Freshness:** Eski ilanlar düzenli olarak temizlenmeli.
+  1586→  1586→5. **Data Completeness:** Eksik veriler tespit edilmeli ve raporlanmalı.
+  1587→  1587→
+  1588→  1588→### 15.4. Performans
+  1589→  1589→
+  1590→  1590→1. **Bulk Operations:** Veritabanı işlemleri batch halinde yapılmalı.
+  1591→  1591→2. **Connection Pooling:** Veritabanı ve Redis bağlantıları havuzlanmalı.
+  1592→  1592→3. **Async/Await:** Tüm I/O işlemleri asenkron yapılmalı.
+  1593→  1593→4. **Caching:** Sık kullanılan veriler cache'lenmeli.
+  1594→  1594→5. **Indexing:** Sorgular için uygun indeksler oluşturulmalı.
+  1595→  1595→
+  1596→  1596→### 15.5. Güvenlik
+  1597→  1597→
+  1598→  1598→1. **Token Koruma:** Admin endpoint'leri token ile korunmalı.
+  1599→  1599→2. **Rate Limiting:** API'lerde rate limiting uygulanmalı.
+  1600→  1600→3. **Input Validation:** Tüm kullanıcı girdileri doğrulanmalı.
+  1601→  1601→4. **Environment Variables:** Hassas bilgiler .env dosyasında saklanmalı.
+  1602→  1602→5. **CORS:** Sadece güvenilir domain'lere izin verilmeli.
+  1603→  1603→
+  1604→  1604→---
+  1605→  1605→
+  1606→  1606→Bu prompt, **z.ai** tarafından Türkiye pazarındaki tüm ikinci el araç ilanlarını toplayan, değerleyen ve analiz eden tam çalışan bir aggregator platformu oluşturmak için kullanılabilir. Tüm 14 site için adapter'lar bu şablona göre yazılabilir ve sistem production'a alınabilir.
