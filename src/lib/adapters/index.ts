@@ -26,6 +26,7 @@ export interface AdapterStatusEntry {
 export const ADAPTER_STATUSES: AdapterStatusEntry[] = [
   { name: 'letgo', displayName: 'Letgo', status: 'active', note: 'HTTP + cheerio, real listings scraped.' },
   { name: 'otosor', displayName: 'Otosor', status: 'active', note: 'HTTP + cheerio, /araclar sitemap scrape. No Cloudflare, robots.txt allows all bots.' },
+  { name: 'intercity2', displayName: 'Intercity2', status: 'active', note: 'Public API (/api/search/ + /api/detail/). No Cloudflare, no Playwright needed.' },
   { name: 'sahibinden', displayName: 'Sahibinden.com', status: 'blocked',
     note: 'No public API; robots.txt disallows; ToS forbids scraping. Adapter ships as skeleton with deep-link support only.',
     deepLinkBaseUrl: 'https://www.sahibinden.com' },
