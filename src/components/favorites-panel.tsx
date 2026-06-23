@@ -235,6 +235,9 @@ export function FavoritesPanel() {
                           src={listing.imageUrl}
                           alt={`${listing.make} ${listing.model}`}
                           className="w-full h-full object-cover"
+                          referrerPolicy="no-referrer"
+                          crossOrigin="anonymous"
+                          loading="lazy"
                         />
                       ) : (
                         <Car className="h-8 w-8 text-muted-foreground/30" />

@@ -180,6 +180,9 @@ function MarketCard({
             src={listing.imageUrl}
             alt={`${listing.make} ${listing.model}`}
             className="w-full h-full object-cover"
+            referrerPolicy="no-referrer"
+            crossOrigin="anonymous"
+            loading="lazy"
           />
         </div>
       )}

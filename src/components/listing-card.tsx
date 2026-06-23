@@ -103,6 +103,9 @@ export function ListingCard({ listing, onClick, index = 0 }: ListingCardProps) {
               alt={`${listing.make} ${listing.model}`}
               className="w-full h-full object-cover"
               onError={() => setImgError(true)}
+              referrerPolicy="no-referrer"
+              crossOrigin="anonymous"
+              loading="lazy"
             />
           ) : (
             <Car className="h-16 w-16 text-white/20" />
