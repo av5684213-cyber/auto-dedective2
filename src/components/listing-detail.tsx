@@ -210,7 +210,6 @@ export function ListingDetail({ listing, open, onClose, onComparableClick }: Lis
                   className="w-full h-full object-cover"
                   onError={() => dispatch({ type: 'IMG_ERROR' })}
                   referrerPolicy="no-referrer"
-                  crossOrigin="anonymous"
                 />
               ) : (
                 <Car className="h-24 w-24 text-white/15" />
