@@ -1,15 +1,17 @@
 'use client'
-// Otodedektif - Last update: 1781992700
+// Otodedektif - Last update: 2026-06-23
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Search, BarChart3, Car } from 'lucide-react'
+import { Search, BarChart3, Car, Heart } from 'lucide-react'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { SearchBar } from '@/components/search-bar'
 import { FilterSidebar, FilterButton } from '@/components/filter-sidebar'
 import { ListingGrid } from '@/components/listing-grid'
 import { ListingDetail } from '@/components/listing-detail'
 import { StatsDashboard } from '@/components/stats-dashboard'
+import { FavoritesPanel } from '@/components/favorites-panel'
+import { useFavorites } from '@/hooks/use-favorites'
 import type { SearchFilters, SearchResult, ListingWithScore, SearchAggregations } from '@/lib/types'
 
 const DEFAULT_FILTERS: SearchFilters = {
@@ -64,7 +66,8 @@ function updateUrl(filters: SearchFilters, tab: string) {
 }
 
 export default function Home() {
-  const [activeTab, setActiveTab] = useState<'search' | 'dashboard'>('search')
+  const [activeTab, setActiveTab] = useState<'search' | 'dashboard' | 'favorites'>('search')
+  const { count: favCount, hydrated: favHydrated } = useFavorites()
   const [filters, setFilters] = useState<SearchFilters>(DEFAULT_FILTERS)
   const [results, setResults] = useState<SearchResult | null>(null)
   const [loading, setLoading] = useState(true)
@@ -235,11 +238,20 @@ export default function Home() {
           </div>
 
           {/* Navigation Tabs */}
-          <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'search' | 'dashboard')}>
+          <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'search' | 'dashboard' | 'favorites')}>
             <TabsList className="bg-muted/50">
               <TabsTrigger value="search" className="gap-1.5 text-xs sm:text-sm data-[state=active]:bg-teal-600 data-[state=active]:text-white">
                 <Search className="h-3.5 w-3.5" />
                 <span className="hidden sm:inline">Ara</span>
+              </TabsTrigger>
+              <TabsTrigger value="favorites" className="gap-1.5 text-xs sm:text-sm data-[state=active]:bg-rose-500 data-[state=active]:text-white relative">
+                <Heart className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Favoriler</span>
+                {favHydrated && favCount > 0 && (
+                  <span className="ml-0.5 inline-flex items-center justify-center min-w-[16px] h-4 px-1 rounded-full bg-rose-500 text-white text-[10px] font-semibold leading-none">
+                    {favCount > 9 ? '9+' : favCount}
+                  </span>
+                )}
               </TabsTrigger>
               <TabsTrigger value="dashboard" className="gap-1.5 text-xs sm:text-sm data-[state=active]:bg-teal-600 data-[state=active]:text-white">
                 <BarChart3 className="h-3.5 w-3.5" />
@@ -308,6 +320,16 @@ export default function Home() {
                   />
                 </div>
               </div>
+            </motion.div>
+          ) : activeTab === 'favorites' ? (
+            <motion.div
+              key="favorites"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+            >
+              <FavoritesPanel />
             </motion.div>
           ) : (
             <motion.div

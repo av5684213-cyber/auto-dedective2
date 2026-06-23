@@ -4,10 +4,12 @@ import { useState } from 'react'
 import { motion } from 'framer-motion'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Fuel, Gauge, MapPin, Settings2, Car } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Fuel, Gauge, MapPin, Settings2, Car, Heart } from 'lucide-react'
 import { DealBadge } from '@/components/deal-badge'
-import { PriceDisplay, formatPrice } from '@/components/price-display'
+import { PriceDisplay } from '@/components/price-display'
 import { SOURCE_PLATFORMS } from '@/lib/constants'
+import { useFavorites } from '@/hooks/use-favorites'
 import type { ListingWithScore } from '@/lib/types'
 
 interface ListingCardProps {
@@ -39,8 +41,9 @@ function getDealScoreColor(score: number | null | undefined): string {
 export function ListingCard({ listing, onClick, index = 0 }: ListingCardProps) {
   const source = getSourcePlatform(listing.sourceName)
   const [imgError, setImgError] = useState(false)
+  const { isFavorite, toggleFavorite, hydrated } = useFavorites()
+  const fav = hydrated && isFavorite(listing.id)
 
-  // Generate a gradient based on make for placeholder
   const gradientColors: Record<string, string> = {
     'BMW': 'from-blue-900 to-slate-700',
     'Mercedes-Benz': 'from-gray-800 to-gray-600',
@@ -56,6 +59,11 @@ export function ListingCard({ listing, onClick, index = 0 }: ListingCardProps) {
   const gradient = gradientColors[listing.make] || 'from-teal-700 to-slate-600'
   const hasImage = listing.imageUrl && !imgError
 
+  const handleFavoriteClick = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    toggleFavorite(listing.id)
+  }
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -65,7 +73,20 @@ export function ListingCard({ listing, onClick, index = 0 }: ListingCardProps) {
       className="cursor-pointer"
       onClick={() => onClick(listing)}
     >
-      <Card className="overflow-hidden border hover:shadow-lg transition-shadow duration-300 h-full flex flex-col">
+      <Card className="overflow-hidden border hover:shadow-lg transition-shadow duration-300 h-full flex flex-col relative">
+        {/* Favorite Button */}
+        <button
+          onClick={handleFavoriteClick}
+          className={`absolute top-2 right-2 z-20 p-2 rounded-full backdrop-blur-sm transition-all duration-200 ${
+            fav
+              ? 'bg-rose-500 text-white hover:bg-rose-600'
+              : 'bg-white/80 text-gray-600 hover:bg-white hover:text-rose-500'
+          }`}
+          aria-label={fav ? 'Favorilerden çıkar' : 'Favorilere ekle'}
+        >
+          <Heart className={`h-4 w-4 ${fav ? 'fill-current' : ''}`} />
+        </button>
+
         {/* Image */}
         <div className={`relative h-40 ${hasImage ? '' : `bg-gradient-to-br ${gradient}`} flex items-center justify-center overflow-hidden`}>
           {hasImage ? (
@@ -78,7 +99,7 @@ export function ListingCard({ listing, onClick, index = 0 }: ListingCardProps) {
           ) : (
             <Car className="h-16 w-16 text-white/20" />
           )}
-          
+
           {/* Deal Tag */}
           {listing.dealTag && (
             <div className="absolute top-2 left-2">
@@ -86,9 +107,9 @@ export function ListingCard({ listing, onClick, index = 0 }: ListingCardProps) {
             </div>
           )}
 
-          {/* Deal Score Indicator */}
+          {/* Deal Score Indicator (moved below favorite button) */}
           {listing.dealScore !== null && listing.dealScore !== undefined && (
-            <div className="absolute top-2 right-2">
+            <div className="absolute top-2 right-12">
               <div className="bg-black/50 backdrop-blur-sm rounded-full px-2 py-1 flex items-center gap-1.5">
                 <div className={`w-2 h-2 rounded-full ${getDealScoreColor(listing.dealScore)}`} />
                 <span className="text-white text-xs font-medium">
