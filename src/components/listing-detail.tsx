@@ -22,6 +22,7 @@ import { DealBadge } from '@/components/deal-badge'
 import { PriceDisplay, formatPrice } from '@/components/price-display'
 import { StarRating } from '@/components/star-rating'
 import { ShareButton } from '@/components/share-button'
+import { LoanCalculator } from '@/components/loan-calculator'
 import { useFavorites } from '@/hooks/use-favorites'
 import { SOURCE_PLATFORMS, DEAL_TAG_CONFIG } from '@/lib/constants'
 import type { ListingWithScore } from '@/lib/types'
@@ -315,6 +316,9 @@ export function ListingDetail({ listing, open, onClose, onComparableClick }: Lis
                   <span className="sm:hidden">Gör</span>
                 </Button>
               </div>
+
+              {/* Kredi Hesaplayıcı */}
+              <LoanCalculator price={detail.price} compact />
 
               <Separator />
 
