@@ -3,6 +3,7 @@ import { BaseAdapter, type ListingRaw, type AdapterResult, type SearchFilters } 
 import { LetgoAdapter } from './letgo';
 import { SahibindenAdapter } from './sahibinden';
 import { DodAdapter } from './dod';
+import { BorusanAdapter } from './borusan';
 
 // ── Re-exports ────────────────────────────────────────────────────────
 export { BaseAdapter } from './base';
@@ -10,6 +11,7 @@ export type { ListingRaw, AdapterResult, SearchFilters } from './base';
 export { LetgoAdapter } from './letgo';
 export { SahibindenAdapter } from './sahibinden';
 export { DodAdapter } from './dod';
+export { BorusanAdapter } from './borusan';
 
 // ── Adapter Status ────────────────────────────────────────────────────
 
@@ -63,6 +65,9 @@ export const ADAPTER_STATUSES: AdapterStatusEntry[] = [
   { name: 'tasit', displayName: 'Taşıt.com', status: 'unreachable',
     note: 'DNS unreachable.',
     deepLinkBaseUrl: 'https://www.tasit.com' },
+  { name: 'borusan', displayName: 'Borusan Next', status: 'blocked',
+    note: 'Cloudflare-protected (403). No public API. Adapter ships as skeleton with deep-link support only.',
+    deepLinkBaseUrl: 'https://www.borusannext.com' },
 ];
 
 // ── Adapter Registry ──────────────────────────────────────────────────
