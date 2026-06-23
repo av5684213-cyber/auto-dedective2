@@ -360,7 +360,7 @@ export default function Home() {
             <span>© {new Date().getFullYear()}</span>
           </div>
           <p>
-            Tüm İkinci El Araç Siteleri Tek Bir Adreste — Tüm platformları tek aramada karşılaştırın
+            Tüm İkinci El Araç İlanları Tek Bir Adreste — Tüm platformları tek aramada karşılaştırın
           </p>
         </div>
       </footer>
