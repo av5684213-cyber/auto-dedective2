@@ -109,7 +109,12 @@ export async function bulkScrapeIntercity2(maxListings: number = 200): Promise<{
           const city = String(d.bolge || '').toLowerCase() || null;
 
           let img = String(d.resim || '');
-          if (img && !img.startsWith('http')) img = `${BASE_URL}/${img.replace(/^\//, '')}`;
+          // Intercity2 stores image filenames in API, served at /arac-resimleri/{filename}
+          // _original → _big for better quality/size ratio
+          if (img) {
+            img = img.replace('_original', '_big');
+            img = `${BASE_URL}/arac-resimleri/${img}`;
+          }
 
           listings.push({
             sourceName: 'intercity2',
