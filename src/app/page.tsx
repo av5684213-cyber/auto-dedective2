@@ -11,6 +11,7 @@ import { ListingGrid } from '@/components/listing-grid'
 import { ListingDetail } from '@/components/listing-detail'
 import { StatsDashboard } from '@/components/stats-dashboard'
 import { FavoritesPanel } from '@/components/favorites-panel'
+import { UserMenu } from '@/components/auth/user-menu'
 import { useFavorites } from '@/hooks/use-favorites'
 import type { SearchFilters, SearchResult, ListingWithScore, SearchAggregations } from '@/lib/types'
 
@@ -227,9 +228,9 @@ export default function Home() {
     <div className="min-h-screen flex flex-col bg-background">
       {/* Sticky Header */}
       <header className="sticky top-0 z-40 bg-white/80 backdrop-blur-lg border-b">
-        <div className="max-w-7xl mx-auto px-4 h-14 flex items-center justify-between">
+        <div className="max-w-7xl mx-auto px-4 h-14 flex items-center justify-between gap-4">
           {/* Logo */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
             <Car className="h-6 w-6 text-teal-600" />
             <span className="text-lg font-extrabold">
               <span className="text-teal-600">Oto</span>
@@ -259,6 +260,11 @@ export default function Home() {
               </TabsTrigger>
             </TabsList>
           </Tabs>
+
+          {/* User Menu */}
+          <div className="shrink-0">
+            <UserMenu />
+          </div>
         </div>
       </header>
 

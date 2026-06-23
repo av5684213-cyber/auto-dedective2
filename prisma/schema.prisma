@@ -55,6 +55,7 @@ model Listing {
 
   // İlişkiler
   priceHistory    PriceHistory[]
+  favorites       UserFavorite[]
   duplicateGroupId String? @map("duplicate_group_id")
 
   @@index([sourceName])
@@ -107,4 +108,35 @@ model CacheStats {
   missCount   Int       @default(0) @map("miss_count")
   lastHit     DateTime? @map("last_hit")
   lastMiss    DateTime? @map("last_miss")
+}
+
+// ── User (membership system) ───────────────────────────────────────────
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  name          String?
+  passwordHash  String    @map("password_hash")
+  role          String    @default("user") // "user" | "admin"
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  favorites     UserFavorite[]
+
+  @@map("users")
+}
+
+model UserFavorite {
+  id          String   @id @default(cuid())
+  userId      String   @map("user_id")
+  listingId   String   @map("listing_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  listing     Listing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, listingId]) // one favorite per user+listing
+  @@index([userId])
+  @@index([listingId])
+  @@map("user_favorites")
 }

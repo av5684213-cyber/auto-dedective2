@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useReducer } from 'react'
+import { useEffect, useReducer, useState } from 'react'
 import { motion } from 'framer-motion'
 import {
   Dialog,
@@ -16,10 +16,12 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import {
   Fuel, Gauge, MapPin, Settings2, Car,
   ExternalLink, TrendingDown, Shield, Wrench, Receipt, Droplets,
-  Clock
+  Clock, Heart, Share2, Check
 } from 'lucide-react'
 import { DealBadge } from '@/components/deal-badge'
 import { PriceDisplay, formatPrice } from '@/components/price-display'
+import { ShareButton } from '@/components/share-button'
+import { useFavorites } from '@/hooks/use-favorites'
 import { SOURCE_PLATFORMS, DEAL_TAG_CONFIG } from '@/lib/constants'
 import type { ListingWithScore } from '@/lib/types'
 
@@ -291,15 +293,26 @@ export function ListingDetail({ listing, open, onClose, onComparableClick }: Lis
                 )}
               </div>
 
-              {/* Source Link */}
-              <Button
-                variant="outline"
-                className="w-full gap-2"
-                onClick={() => window.open(detail.sourceUrl, '_blank', 'noopener')}
-              >
-                <ExternalLink className="h-4 w-4" />
-                Kaynak Platformda Görüntüle ({source.displayName})
-              </Button>
+              {/* Action Buttons: Favorite + Share + Source Link */}
+              <div className="flex gap-2">
+                <FavoriteToggleButton listing={detail} />
+                <ShareButton
+                  url={detail.sourceUrl}
+                  title={`${detail.make} ${detail.model} ${detail.year} - ${formatPrice(detail.price)}`}
+                  variant="button"
+                  size="md"
+                  className="flex-shrink-0"
+                />
+                <Button
+                  variant="outline"
+                  className="flex-1 gap-2"
+                  onClick={() => window.open(detail.sourceUrl, '_blank', 'noopener')}
+                >
+                  <ExternalLink className="h-4 w-4" />
+                  <span className="hidden sm:inline">Kaynakta Gör</span>
+                  <span className="sm:hidden">Gör</span>
+                </Button>
+              </div>
 
               <Separator />
 
@@ -524,5 +537,26 @@ function SpecRow({ label, value }: { label: string; value: string }) {
       <span className="text-muted-foreground">{label}</span>
       <span className="font-medium">{value}</span>
     </div>
+  )
+}
+
+// ── Favorite Toggle Button (for detail modal) ───────────────────────────
+
+function FavoriteToggleButton({ listing }: { listing: ListingWithScore }) {
+  const { isFavorite, toggleFavorite, hydrated } = useFavorites()
+  const fav = hydrated && isFavorite(listing.id)
+
+  return (
+    <button
+      onClick={() => toggleFavorite(listing.id)}
+      className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-all flex-shrink-0 ${
+        fav
+          ? 'bg-rose-500 text-white hover:bg-rose-600'
+          : 'bg-muted hover:bg-muted/80 text-foreground'
+      }`}
+    >
+      <Heart className={`h-4 w-4 ${fav ? 'fill-current' : ''}`} />
+      <span className="hidden sm:inline">{fav ? 'Favorilerde' : 'Favori'}</span>
+    </button>
   )
 }

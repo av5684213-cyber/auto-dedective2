@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Fuel, Gauge, MapPin, Settings2, Car, Heart } from 'lucide-react'
 import { DealBadge } from '@/components/deal-badge'
 import { PriceDisplay } from '@/components/price-display'
+import { ShareButton } from '@/components/share-button'
 import { SOURCE_PLATFORMS } from '@/lib/constants'
 import { useFavorites } from '@/hooks/use-favorites'
 import type { ListingWithScore } from '@/lib/types'
@@ -74,18 +75,25 @@ export function ListingCard({ listing, onClick, index = 0 }: ListingCardProps) {
       onClick={() => onClick(listing)}
     >
       <Card className="overflow-hidden border hover:shadow-lg transition-shadow duration-300 h-full flex flex-col relative">
-        {/* Favorite Button */}
-        <button
-          onClick={handleFavoriteClick}
-          className={`absolute top-2 right-2 z-20 p-2 rounded-full backdrop-blur-sm transition-all duration-200 ${
-            fav
-              ? 'bg-rose-500 text-white hover:bg-rose-600'
-              : 'bg-white/80 text-gray-600 hover:bg-white hover:text-rose-500'
-          }`}
-          aria-label={fav ? 'Favorilerden çıkar' : 'Favorilere ekle'}
-        >
-          <Heart className={`h-4 w-4 ${fav ? 'fill-current' : ''}`} />
-        </button>
+        {/* Favorite + Share Buttons */}
+        <div className="absolute top-2 right-2 z-20 flex items-center gap-1">
+          <ShareButton
+            url={listing.sourceUrl}
+            title={`${listing.make} ${listing.model} ${listing.year} - ${listing.price.toLocaleString('tr-TR')} TL`}
+            size="sm"
+          />
+          <button
+            onClick={handleFavoriteClick}
+            className={`p-2 rounded-full backdrop-blur-sm transition-all duration-200 ${
+              fav
+                ? 'bg-rose-500 text-white hover:bg-rose-600'
+                : 'bg-white/80 text-gray-600 hover:bg-white hover:text-rose-500'
+            }`}
+            aria-label={fav ? 'Favorilerden çıkar' : 'Favorilere ekle'}
+          >
+            <Heart className={`h-4 w-4 ${fav ? 'fill-current' : ''}`} />
+          </button>
+        </div>
 
         {/* Image */}
         <div className={`relative h-40 ${hasImage ? '' : `bg-gradient-to-br ${gradient}`} flex items-center justify-center overflow-hidden`}>
@@ -107,9 +115,9 @@ export function ListingCard({ listing, onClick, index = 0 }: ListingCardProps) {
             </div>
           )}
 
-          {/* Deal Score Indicator (moved below favorite button) */}
+          {/* Deal Score Indicator (below favorite/share buttons) */}
           {listing.dealScore !== null && listing.dealScore !== undefined && (
-            <div className="absolute top-2 right-12">
+            <div className="absolute bottom-14 right-2">
               <div className="bg-black/50 backdrop-blur-sm rounded-full px-2 py-1 flex items-center gap-1.5">
                 <div className={`w-2 h-2 rounded-full ${getDealScoreColor(listing.dealScore)}`} />
                 <span className="text-white text-xs font-medium">
