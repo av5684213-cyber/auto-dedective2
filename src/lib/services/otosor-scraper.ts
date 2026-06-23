@@ -234,8 +234,9 @@ async function fetchAndParseOne(url: string, slugData: ParsedSlug): Promise<List
     const price = parseInt(priceMatch[1].replace(/\./g, ''), 10);
     if (!price || price < 10000) return null;
 
-    // Image (og:image or first img in vehicle detail)
-    const imgMatch = html.match(/<meta\s+property="og:image"\s+content="([^"]+)"/i);
+    // Image — Otosor stores image URLs in JSON: "image":"https://storage.googleapis.com/..."
+    // og:image meta tag is not present, so we use JSON instead.
+    const imgMatch = html.match(/"image"\s*:\s*"([^"]+)"/);
     const imageUrl = imgMatch?.[1];
 
     // City (try to find in page)
