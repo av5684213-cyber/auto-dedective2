@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Fuel, Gauge, MapPin, Settings2, Car, Heart } from 'lucide-react'
 import { DealBadge } from '@/components/deal-badge'
 import { PriceDisplay } from '@/components/price-display'
+import { StarRating } from '@/components/star-rating'
 import { ShareButton } from '@/components/share-button'
 import { SOURCE_PLATFORMS } from '@/lib/constants'
 import { useFavorites } from '@/hooks/use-favorites'
@@ -57,7 +58,7 @@ export function ListingCard({ listing, onClick, index = 0 }: ListingCardProps) {
     'Renault': 'from-yellow-700 to-gray-600',
     'Fiat': 'from-red-600 to-gray-600',
   }
-  const gradient = gradientColors[listing.make] || 'from-teal-700 to-slate-600'
+  const gradient = gradientColors[listing.make] || 'from-orange-700 to-slate-600'
   const hasImage = listing.imageUrl && !imgError
 
   const handleFavoriteClick = (e: React.MouseEvent) => {
@@ -165,8 +166,17 @@ export function ListingCard({ listing, onClick, index = 0 }: ListingCardProps) {
             estimatedValue={listing.estimatedValue}
             dealTag={listing.dealTag}
             size="sm"
-            className="mb-3"
+            className="mb-1.5"
           />
+
+          {/* Star Rating */}
+          <div className="mb-3">
+            <StarRating
+              dealScore={listing.dealScore}
+              confidence={listing.confidence}
+              size="sm"
+            />
+          </div>
 
           {/* Specs */}
           <div className="flex flex-wrap gap-x-3 gap-y-1.5 text-xs text-muted-foreground mt-auto">

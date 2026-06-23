@@ -130,13 +130,13 @@ export function StatsDashboard() {
       {/* Top Stats Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0 }}>
-          <Card className="border-teal-200 bg-gradient-to-br from-teal-50 to-white">
+          <Card className="border-orange-200 bg-gradient-to-br from-orange-50 to-white">
             <CardContent className="p-4">
-              <div className="flex items-center gap-2 text-teal-600 mb-1">
+              <div className="flex items-center gap-2 text-orange-600 mb-1">
                 <Car className="h-4 w-4" />
                 <span className="text-xs font-medium">Toplam İlan</span>
               </div>
-              <p className="text-2xl font-bold text-teal-700">
+              <p className="text-2xl font-bold text-orange-700">
                 {stats.totalActive.toLocaleString('tr-TR')}
               </p>
             </CardContent>
@@ -191,7 +191,7 @@ export function StatsDashboard() {
         <Button
           onClick={handleScrape}
           disabled={scraping}
-          className="bg-teal-600 hover:bg-teal-700 gap-2"
+          className="bg-orange-600 hover:bg-orange-700 gap-2"
         >
           {scraping ? (
             <>
@@ -213,7 +213,7 @@ export function StatsDashboard() {
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-base flex items-center gap-2">
-                <BarChart3 className="h-4 w-4 text-teal-600" />
+                <BarChart3 className="h-4 w-4 text-orange-600" />
                 Kaynak Bazlı İlan Sayısı
               </CardTitle>
             </CardHeader>
@@ -335,7 +335,7 @@ export function StatsDashboard() {
                   <Badge
                     key={c.city}
                     variant={i < 3 ? 'default' : 'secondary'}
-                    className={`${i < 3 ? 'bg-teal-600' : ''} gap-1`}
+                    className={`${i < 3 ? 'bg-orange-600' : ''} gap-1`}
                   >
                     <MapPin className="h-3 w-3" />
                     {c.city}
@@ -419,7 +419,7 @@ export function StatsDashboard() {
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-base flex items-center gap-2">
-              <Car className="h-4 w-4 text-teal-600" />
+              <Car className="h-4 w-4 text-orange-600" />
               Marka Bazlı İlan Sayısı
             </CardTitle>
           </CardHeader>
@@ -429,7 +429,7 @@ export function StatsDashboard() {
                 <Badge
                   key={m.make}
                   variant={i < 5 ? 'default' : 'secondary'}
-                  className={`${i < 5 ? 'bg-teal-600' : ''} gap-1`}
+                  className={`${i < 5 ? 'bg-orange-600' : ''} gap-1`}
                 >
                   {m.make}
                   <span className="text-xs opacity-80">({m.count})</span>

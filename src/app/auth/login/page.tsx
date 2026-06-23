@@ -54,9 +54,9 @@ function LoginForm() {
       className="w-full max-w-md"
     >
       <div className="flex items-center justify-center gap-2 mb-8">
-        <Car className="h-8 w-8 text-teal-600" />
+        <Car className="h-8 w-8 text-orange-600" />
         <span className="text-2xl font-extrabold">
-          <span className="text-teal-600">Oto</span>
+          <span className="text-orange-600">Oto</span>
           <span className="text-amber-500">dedektif</span>
         </span>
       </div>
@@ -108,7 +108,7 @@ function LoginForm() {
 
             <Button
               type="submit"
-              className="w-full bg-teal-600 hover:bg-teal-700 gap-1.5"
+              className="w-full bg-orange-600 hover:bg-orange-700 gap-1.5"
               disabled={loading}
             >
               {loading ? 'Giriş yapılıyor...' : 'Giriş Yap'}
@@ -118,7 +118,7 @@ function LoginForm() {
 
           <div className="mt-6 text-center text-sm text-muted-foreground">
             Hesabın yok mu?{' '}
-            <Link href="/auth/register" className="text-teal-600 hover:text-teal-700 font-medium">
+            <Link href="/auth/register" className="text-orange-600 hover:text-orange-700 font-medium">
               Kayıt ol
             </Link>
           </div>
@@ -136,7 +136,7 @@ function LoginForm() {
 
 export default function LoginPage() {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-teal-50 to-white p-4">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-orange-50 to-white p-4">
       <Suspense fallback={<div className="text-muted-foreground">Yükleniyor...</div>}>
         <LoginForm />
       </Suspense>

@@ -61,7 +61,7 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-teal-50 to-white p-4">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-orange-50 to-white p-4">
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -70,9 +70,9 @@ export default function RegisterPage() {
       >
         {/* Logo */}
         <div className="flex items-center justify-center gap-2 mb-8">
-          <Car className="h-8 w-8 text-teal-600" />
+          <Car className="h-8 w-8 text-orange-600" />
           <span className="text-2xl font-extrabold">
-            <span className="text-teal-600">Oto</span>
+            <span className="text-orange-600">Oto</span>
             <span className="text-amber-500">dedektif</span>
           </span>
         </div>
@@ -140,7 +140,7 @@ export default function RegisterPage() {
 
               <Button
                 type="submit"
-                className="w-full bg-teal-600 hover:bg-teal-700 gap-1.5"
+                className="w-full bg-orange-600 hover:bg-orange-700 gap-1.5"
                 disabled={loading}
               >
                 {loading ? 'Kayıt yapılıyor...' : 'Kayıt Ol'}
@@ -150,7 +150,7 @@ export default function RegisterPage() {
 
             <div className="mt-6 text-center text-sm text-muted-foreground">
               Zaten hesabın var mı?{' '}
-              <Link href="/auth/login" className="text-teal-600 hover:text-teal-700 font-medium">
+              <Link href="/auth/login" className="text-orange-600 hover:text-orange-700 font-medium">
                 Giriş yap
               </Link>
             </div>

@@ -172,7 +172,7 @@ export function FavoritesPanel() {
             <Button
               onClick={handleCompare}
               size="sm"
-              className="bg-teal-600 hover:bg-teal-700 gap-1.5"
+              className="bg-orange-600 hover:bg-orange-700 gap-1.5"
             >
               <GitCompare className="h-4 w-4" />
               Karşılaştır
@@ -222,7 +222,7 @@ export function FavoritesPanel() {
                 <Card
                   className={`overflow-hidden transition-all cursor-pointer ${
                     isSelected
-                      ? 'ring-2 ring-teal-500 border-teal-500'
+                      ? 'ring-2 ring-orange-500 border-orange-500'
                       : 'hover:shadow-md'
                   }`}
                   onClick={() => handleToggleCompare(listing.id)}
@@ -264,7 +264,7 @@ export function FavoritesPanel() {
                       </div>
 
                       {/* Price */}
-                      <div className="text-lg font-bold text-teal-700 mb-1">
+                      <div className="text-lg font-bold text-orange-700 mb-1">
                         {formatPrice(listing.price)}
                       </div>
 
@@ -309,7 +309,7 @@ export function FavoritesPanel() {
                   <div className="flex items-center justify-between px-3 py-2 bg-muted/30 border-t">
                     <div className="flex items-center gap-2">
                       {isSelected ? (
-                        <Badge className="bg-teal-600 text-white gap-1">
+                        <Badge className="bg-orange-600 text-white gap-1">
                           <GitCompare className="h-3 w-3" />
                           Karşılaştırmada
                         </Badge>
@@ -327,7 +327,7 @@ export function FavoritesPanel() {
                         target="_blank"
                         rel="noopener noreferrer"
                         onClick={(e) => e.stopPropagation()}
-                        className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-teal-600"
+                        className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-orange-600"
                         title="Kaynakta gör"
                       >
                         <ExternalLink className="h-3.5 w-3.5" />

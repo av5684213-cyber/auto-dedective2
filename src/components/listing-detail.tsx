@@ -20,6 +20,7 @@ import {
 } from 'lucide-react'
 import { DealBadge } from '@/components/deal-badge'
 import { PriceDisplay, formatPrice } from '@/components/price-display'
+import { StarRating } from '@/components/star-rating'
 import { ShareButton } from '@/components/share-button'
 import { useFavorites } from '@/hooks/use-favorites'
 import { SOURCE_PLATFORMS, DEAL_TAG_CONFIG } from '@/lib/constants'
@@ -201,7 +202,7 @@ export function ListingDetail({ listing, open, onClose, onComparableClick }: Lis
         <ScrollArea className="max-h-[90vh]">
           <div className="p-0">
             {/* Image */}
-            <div className={`relative h-48 sm:h-64 ${detailHasImage ? '' : 'bg-gradient-to-br from-teal-800 to-slate-700'} flex items-center justify-center overflow-hidden`}>
+            <div className={`relative h-48 sm:h-64 ${detailHasImage ? '' : 'bg-gradient-to-br from-orange-800 to-slate-700'} flex items-center justify-center overflow-hidden`}>
               {detailHasImage ? (
                 <img
                   src={detail.imageUrl!}
@@ -259,7 +260,7 @@ export function ListingDetail({ listing, open, onClose, onComparableClick }: Lis
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 {detail.mileageKm !== null && detail.mileageKm !== undefined && (
                   <div className="flex items-center gap-2 p-2.5 bg-muted/50 rounded-lg">
-                    <Gauge className="h-4 w-4 text-teal-600" />
+                    <Gauge className="h-4 w-4 text-orange-600" />
                     <div>
                       <p className="text-xs text-muted-foreground">Kilometre</p>
                       <p className="text-sm font-medium">{turkishFormatter.format(detail.mileageKm)} km</p>
@@ -268,7 +269,7 @@ export function ListingDetail({ listing, open, onClose, onComparableClick }: Lis
                 )}
                 {detail.fuelType && (
                   <div className="flex items-center gap-2 p-2.5 bg-muted/50 rounded-lg">
-                    <Fuel className="h-4 w-4 text-teal-600" />
+                    <Fuel className="h-4 w-4 text-orange-600" />
                     <div>
                       <p className="text-xs text-muted-foreground">Yakıt</p>
                       <p className="text-sm font-medium">{detail.fuelType}</p>
@@ -277,7 +278,7 @@ export function ListingDetail({ listing, open, onClose, onComparableClick }: Lis
                 )}
                 {detail.transmission && (
                   <div className="flex items-center gap-2 p-2.5 bg-muted/50 rounded-lg">
-                    <Settings2 className="h-4 w-4 text-teal-600" />
+                    <Settings2 className="h-4 w-4 text-orange-600" />
                     <div>
                       <p className="text-xs text-muted-foreground">Vites</p>
                       <p className="text-sm font-medium">{detail.transmission}</p>
@@ -286,7 +287,7 @@ export function ListingDetail({ listing, open, onClose, onComparableClick }: Lis
                 )}
                 {detail.city && (
                   <div className="flex items-center gap-2 p-2.5 bg-muted/50 rounded-lg">
-                    <MapPin className="h-4 w-4 text-teal-600" />
+                    <MapPin className="h-4 w-4 text-orange-600" />
                     <div>
                       <p className="text-xs text-muted-foreground">Konum</p>
                       <p className="text-sm font-medium">{detail.city}{detail.district ? ` / ${detail.district}` : ''}</p>
@@ -321,9 +322,16 @@ export function ListingDetail({ listing, open, onClose, onComparableClick }: Lis
               {/* Deal Analysis */}
               {(detail.estimatedValue || detail.dealScore !== null) && (
                 <div className="space-y-3">
-                  <h3 className="font-semibold text-lg flex items-center gap-2">
-                    📊 Fırsat Analizi
-                  </h3>
+                  <div className="flex items-center justify-between">
+                    <h3 className="font-semibold text-lg flex items-center gap-2">
+                      📊 Fırsat Analizi
+                    </h3>
+                    <StarRating
+                      dealScore={detail.dealScore}
+                      confidence={detail.confidence}
+                      size="md"
+                    />
+                  </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     {detail.estimatedValue && (

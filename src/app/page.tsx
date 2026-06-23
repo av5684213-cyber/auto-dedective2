@@ -231,9 +231,9 @@ export default function Home() {
         <div className="max-w-7xl mx-auto px-4 h-14 flex items-center justify-between gap-4">
           {/* Logo */}
           <div className="flex items-center gap-2 shrink-0">
-            <Car className="h-6 w-6 text-teal-600" />
+            <Car className="h-6 w-6 text-orange-600" />
             <span className="text-lg font-extrabold">
-              <span className="text-teal-600">Oto</span>
+              <span className="text-orange-600">Oto</span>
               <span className="text-amber-500">dedektif</span>
             </span>
           </div>
@@ -241,7 +241,7 @@ export default function Home() {
           {/* Navigation Tabs */}
           <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'search' | 'dashboard' | 'favorites')}>
             <TabsList className="bg-muted/50">
-              <TabsTrigger value="search" className="gap-1.5 text-xs sm:text-sm data-[state=active]:bg-teal-600 data-[state=active]:text-white">
+              <TabsTrigger value="search" className="gap-1.5 text-xs sm:text-sm data-[state=active]:bg-orange-600 data-[state=active]:text-white">
                 <Search className="h-3.5 w-3.5" />
                 <span className="hidden sm:inline">Ara</span>
               </TabsTrigger>
@@ -254,7 +254,7 @@ export default function Home() {
                   </span>
                 )}
               </TabsTrigger>
-              <TabsTrigger value="dashboard" className="gap-1.5 text-xs sm:text-sm data-[state=active]:bg-teal-600 data-[state=active]:text-white">
+              <TabsTrigger value="dashboard" className="gap-1.5 text-xs sm:text-sm data-[state=active]:bg-orange-600 data-[state=active]:text-white">
                 <BarChart3 className="h-3.5 w-3.5" />
                 <span className="hidden sm:inline">Paneller</span>
               </TabsTrigger>
@@ -280,7 +280,7 @@ export default function Home() {
               transition={{ duration: 0.2 }}
             >
               {/* Search Bar Section */}
-              <div className="bg-gradient-to-b from-teal-50/80 to-white border-b px-4 py-6 sm:py-8">
+              <div className="bg-gradient-to-b from-orange-50/80 to-white border-b px-4 py-6 sm:py-8">
                 <SearchBar
                   onSearch={handleSearch}
                   onMakeSelect={handleMakeSelect}
@@ -355,8 +355,8 @@ export default function Home() {
       <footer className="mt-auto border-t bg-muted/30 py-4">
         <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-muted-foreground">
           <div className="flex items-center gap-1.5">
-            <Car className="h-3.5 w-3.5 text-teal-600" />
-            <span className="font-semibold text-teal-700">Otodedektif</span>
+            <Car className="h-3.5 w-3.5 text-orange-600" />
+            <span className="font-semibold text-orange-700">Otodedektif</span>
             <span>© {new Date().getFullYear()}</span>
           </div>
           <p>

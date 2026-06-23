@@ -44,7 +44,7 @@ export function UserMenu() {
         <Button
           size="sm"
           onClick={() => router.push('/auth/register')}
-          className="bg-teal-600 hover:bg-teal-700 text-xs sm:text-sm"
+          className="bg-orange-600 hover:bg-orange-700 text-xs sm:text-sm"
         >
           Kayıt Ol
         </Button>
@@ -62,7 +62,7 @@ export function UserMenu() {
         className="flex items-center gap-1.5 p-1 rounded-full hover:bg-muted transition-colors"
       >
         <Avatar className="h-8 w-8">
-          <AvatarFallback className="bg-teal-600 text-white text-xs font-semibold">
+          <AvatarFallback className="bg-orange-600 text-white text-xs font-semibold">
             {initials}
           </AvatarFallback>
         </Avatar>

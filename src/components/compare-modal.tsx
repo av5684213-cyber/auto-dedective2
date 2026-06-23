@@ -161,7 +161,7 @@ function MarketCard({
         </div>
 
         {/* Price */}
-        <div className="text-xl font-bold text-teal-700">
+        <div className="text-xl font-bold text-orange-700">
           {formatPrice(listing.price)}
         </div>
 
@@ -248,7 +248,7 @@ function MarketCard({
           href={listing.sourceUrl}
           target="_blank"
           rel="noopener noreferrer"
-          className="flex items-center justify-center gap-1 text-xs text-teal-600 hover:text-teal-700 mt-1"
+          className="flex items-center justify-center gap-1 text-xs text-orange-600 hover:text-orange-700 mt-1"
         >
           <ExternalLink className="h-3 w-3" />
           Kaynakta gör
@@ -306,7 +306,7 @@ export function CompareModal({ open, onClose, ids }: CompareModalProps) {
       <DialogContent className="max-w-5xl max-h-[90vh] overflow-hidden p-0">
         <DialogHeader className="px-6 pt-6 pb-2">
           <DialogTitle className="flex items-center gap-2 text-lg">
-            <Car className="h-5 w-5 text-teal-600" />
+            <Car className="h-5 w-5 text-orange-600" />
             İlan Karşılaştırma
           </DialogTitle>
           <DialogDescription>
@@ -349,7 +349,7 @@ export function CompareModal({ open, onClose, ids }: CompareModalProps) {
               {/* ── Head-to-head spec comparison ── */}
               <div className="rounded-lg border bg-card p-4">
                 <h4 className="text-sm font-semibold mb-3 flex items-center gap-1.5">
-                  <Car className="h-4 w-4 text-teal-600" />
+                  <Car className="h-4 w-4 text-orange-600" />
                   Özellik Karşılaştırması
                 </h4>
 
@@ -431,9 +431,9 @@ export function CompareModal({ open, onClose, ids }: CompareModalProps) {
               </div>
 
               {/* ── Pairwise differences ── */}
-              <div className="rounded-lg border bg-teal-50/50 p-4 space-y-3">
+              <div className="rounded-lg border bg-orange-50/50 p-4 space-y-3">
                 <h4 className="text-sm font-semibold flex items-center gap-1.5">
-                  <ArrowRight className="h-4 w-4 text-teal-600" />
+                  <ArrowRight className="h-4 w-4 text-orange-600" />
                   İkili Farklar
                 </h4>
 
@@ -488,7 +488,7 @@ export function CompareModal({ open, onClose, ids }: CompareModalProps) {
               {marketStats.count > 0 && (
                 <div className="rounded-lg border bg-card p-4">
                   <h4 className="text-sm font-semibold mb-3 flex items-center gap-1.5">
-                    <BarChart3 className="h-4 w-4 text-teal-600" />
+                    <BarChart3 className="h-4 w-4 text-orange-600" />
                     Piyasa İstatistikleri — {marketStats.make} {marketStats.model}
                   </h4>
 

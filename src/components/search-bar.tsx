@@ -116,7 +116,7 @@ export function SearchBar({ onSearch, onMakeSelect, onModelSelect, currentQuery 
           transition={{ duration: 0.5, delay: 0.1 }}
           className="text-4xl md:text-5xl font-extrabold tracking-tight"
         >
-          <span className="text-teal-600">Oto</span>
+          <span className="text-orange-600">Oto</span>
           <span className="text-amber-500">dedektif</span>
         </motion.h1>
         <motion.p
@@ -140,7 +140,7 @@ export function SearchBar({ onSearch, onMakeSelect, onModelSelect, currentQuery 
               value={query}
               onChange={handleInputChange}
               onFocus={() => { if (suggestions.length > 0) setShowSuggestions(true) }}
-              className="pl-12 pr-12 h-13 text-base rounded-xl border-2 border-teal-200 focus:border-teal-500 focus:ring-teal-500/20 shadow-lg"
+              className="pl-12 pr-12 h-13 text-base rounded-xl border-2 border-orange-200 focus:border-orange-500 focus:ring-orange-500/20 shadow-lg"
             />
             {query && (
               <button
@@ -202,7 +202,7 @@ export function SearchBar({ onSearch, onMakeSelect, onModelSelect, currentQuery 
                 variant="outline"
                 size="sm"
                 onClick={() => onMakeSelect(make)}
-                className="rounded-full text-xs h-8 border-teal-200 hover:bg-teal-50 hover:text-teal-700 hover:border-teal-400"
+                className="rounded-full text-xs h-8 border-orange-200 hover:bg-orange-50 hover:text-orange-700 hover:border-orange-400"
               >
                 {make}
               </Button>

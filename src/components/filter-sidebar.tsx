@@ -95,10 +95,10 @@ function FilterContent({
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b">
         <div className="flex items-center gap-2">
-          <SlidersHorizontal className="h-4 w-4 text-teal-600" />
+          <SlidersHorizontal className="h-4 w-4 text-orange-600" />
           <h3 className="font-semibold text-sm">Filtreler</h3>
           {activeFilterCount > 0 && (
-            <Badge variant="secondary" className="h-5 text-xs bg-teal-100 text-teal-700">
+            <Badge variant="secondary" className="h-5 text-xs bg-orange-100 text-orange-700">
               {activeFilterCount}
             </Badge>
           )}
@@ -251,7 +251,7 @@ function FilterContent({
                   variant={filters.fuelType === ft ? 'default' : 'outline'}
                   size="sm"
                   onClick={() => updateFilter('fuelType', filters.fuelType === ft ? undefined : ft)}
-                  className={`h-7 text-xs rounded-full ${filters.fuelType === ft ? 'bg-teal-600 hover:bg-teal-700' : ''}`}
+                  className={`h-7 text-xs rounded-full ${filters.fuelType === ft ? 'bg-orange-600 hover:bg-orange-700' : ''}`}
                 >
                   {ft}
                 </Button>
@@ -271,7 +271,7 @@ function FilterContent({
                   variant={filters.transmission === t ? 'default' : 'outline'}
                   size="sm"
                   onClick={() => updateFilter('transmission', filters.transmission === t ? undefined : t)}
-                  className={`h-7 text-xs rounded-full ${filters.transmission === t ? 'bg-teal-600 hover:bg-teal-700' : ''}`}
+                  className={`h-7 text-xs rounded-full ${filters.transmission === t ? 'bg-orange-600 hover:bg-orange-700' : ''}`}
                 >
                   {t}
                 </Button>
@@ -291,7 +291,7 @@ function FilterContent({
                   variant={filters.bodyType === bt ? 'default' : 'outline'}
                   size="sm"
                   onClick={() => updateFilter('bodyType', filters.bodyType === bt ? undefined : bt)}
-                  className={`h-7 text-xs rounded-full ${filters.bodyType === bt ? 'bg-teal-600 hover:bg-teal-700' : ''}`}
+                  className={`h-7 text-xs rounded-full ${filters.bodyType === bt ? 'bg-orange-600 hover:bg-orange-700' : ''}`}
                 >
                   {bt}
                 </Button>
@@ -334,7 +334,7 @@ function FilterContent({
                   variant={filters.sellerType === st ? 'default' : 'outline'}
                   size="sm"
                   onClick={() => updateFilter('sellerType', filters.sellerType === st ? undefined : st)}
-                  className={`h-7 text-xs rounded-full ${filters.sellerType === st ? 'bg-teal-600 hover:bg-teal-700' : ''}`}
+                  className={`h-7 text-xs rounded-full ${filters.sellerType === st ? 'bg-orange-600 hover:bg-orange-700' : ''}`}
                 >
                   {st}
                 </Button>
@@ -352,7 +352,7 @@ function FilterContent({
                 <button
                   key={tag}
                   onClick={() => updateFilter('dealTag', filters.dealTag === tag ? undefined : tag)}
-                  className={`transition-all ${filters.dealTag === tag ? 'ring-2 ring-offset-1 ring-teal-500 rounded-full' : 'opacity-70 hover:opacity-100 rounded-full'}`}
+                  className={`transition-all ${filters.dealTag === tag ? 'ring-2 ring-offset-1 ring-orange-500 rounded-full' : 'opacity-70 hover:opacity-100 rounded-full'}`}
                 >
                   <DealBadge tag={tag} />
                 </button>
@@ -425,12 +425,12 @@ export function FilterButton({ onClick, activeCount }: { onClick: () => void; ac
       variant="outline"
       size="sm"
       onClick={onClick}
-      className="lg:hidden rounded-full gap-1.5 border-teal-200"
+      className="lg:hidden rounded-full gap-1.5 border-orange-200"
     >
       <Filter className="h-4 w-4" />
       Filtreler
       {activeCount > 0 && (
-        <Badge className="h-5 w-5 p-0 flex items-center justify-center bg-teal-600 text-white text-xs">
+        <Badge className="h-5 w-5 p-0 flex items-center justify-center bg-orange-600 text-white text-xs">
           {activeCount}
         </Badge>
       )}

@@ -101,7 +101,7 @@ export function ListingGrid({ listings, loading, page, totalPages, total, onPage
                   variant={page === p ? 'default' : 'outline'}
                   size="sm"
                   onClick={() => onPageChange(p as number)}
-                  className={`w-9 h-9 p-0 ${page === p ? 'bg-teal-600 hover:bg-teal-700' : ''}`}
+                  className={`w-9 h-9 p-0 ${page === p ? 'bg-orange-600 hover:bg-orange-700' : ''}`}
                 >
                   {p}
                 </Button>

@@ -110,7 +110,7 @@ export function ShareButton({
       className={`${btnSize} rounded-full backdrop-blur-sm transition-all duration-200 ${
         copied
           ? 'bg-green-500 text-white'
-          : 'bg-white/80 text-gray-600 hover:bg-white hover:text-teal-600'
+          : 'bg-white/80 text-gray-600 hover:bg-white hover:text-orange-600'
       } ${className}`}
       title={copied ? 'Link kopyalandı!' : 'Paylaş'}
       aria-label="Paylaş"
