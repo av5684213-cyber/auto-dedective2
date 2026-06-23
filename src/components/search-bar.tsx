@@ -125,7 +125,7 @@ export function SearchBar({ onSearch, onMakeSelect, onModelSelect, currentQuery 
           transition={{ duration: 0.5, delay: 0.2 }}
           className="text-muted-foreground mt-2 text-sm md:text-base"
         >
-          Türkiye&apos;nin İkinci El Araç Meta-Arama Platformu
+          Tüm İkinci El Araç Siteleri Tek Bir Adreste
         </motion.p>
       </div>
 
