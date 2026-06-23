@@ -116,8 +116,8 @@ export function SearchBar({ onSearch, onMakeSelect, onModelSelect, currentQuery 
           transition={{ duration: 0.5, delay: 0.1 }}
           className="text-4xl md:text-5xl font-extrabold tracking-tight"
         >
-          <span className="text-teal-600">Aracı</span>
-          <span className="text-amber-500">Kıyas</span>
+          <span className="text-teal-600">Oto</span>
+          <span className="text-amber-500">dedektif</span>
         </motion.h1>
         <motion.p
           initial={{ opacity: 0 }}

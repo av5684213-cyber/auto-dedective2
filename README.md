@@ -1,4 +1,4 @@
-# AracıKıyas — Türkiye İkinci El Araç Meta-Arama Platformu
+# Otodedektif — Türkiye İkinci El Araç Meta-Arama Platformu
 
 Türkiye'deki ikinci el araç ilanlarını 14+ platformdan toplayan, karşılaştıran ve fiyat analizi sunan meta-arama platformu.
 

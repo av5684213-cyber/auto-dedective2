@@ -1,5 +1,5 @@
 // apps/scraper/src/scheduler.ts
-// AracıKıyas - Cron-based scraping scheduler
+// Otodedektif - Cron-based scraping scheduler
 
 import { scrapeAll, scrapeSingle } from './scraper';
 import { valueAllListings } from './valuator';

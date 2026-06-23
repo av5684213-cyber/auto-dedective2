@@ -1,4 +1,4 @@
-// AracıKıyas - Cost Estimator Engine
+// Otodedektif - Cost Estimator Engine
 // Calculates total cost of ownership for Turkish second-hand car market
 
 import { db } from '@/lib/db';

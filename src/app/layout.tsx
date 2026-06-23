@@ -14,12 +14,12 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "AracıKıyas - Türkiye'nin İkinci El Araç Meta-Arama Platformu",
+  title: "Otodedektif - Türkiye'nin İkinci El Araç Meta-Arama Platformu",
   description: "Tüm ikinci el araç platformlarını tek aramada karşılaştırın. En iyi fırsatları bulun, fiyat analizi yapın.",
   keywords: ["ikinci el", "araç", "otomobil", "kıyasla", "fiyat", "sahibinden", "arabam", "meta-arama"],
-  authors: [{ name: "AracıKıyas" }],
+  authors: [{ name: "Otodedektif" }],
   openGraph: {
-    title: "AracıKıyas",
+    title: "Otodedektif",
     description: "Türkiye'nin İkinci El Araç Meta-Arama Platformu",
     type: "website",
   },

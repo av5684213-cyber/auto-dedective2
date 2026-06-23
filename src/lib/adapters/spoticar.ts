@@ -1,4 +1,4 @@
-import { BaseAdapter, generateMockListings, type SearchFilters, type AdapterResult, type ListingRaw } from './base';
+import { BaseAdapter, type SearchFilters, type AdapterResult, type ListingRaw } from './base';
 import { RateLimiter, getRateLimiter } from '@/lib/utils/rate-limiter';
 import { TURKISH_MAKES, MAKE_MODELS } from '@/lib/constants';
 import * as cheerio from 'cheerio';
@@ -201,18 +201,7 @@ export class SpoticarAdapter extends BaseAdapter {
   // ── Fallback with mock data ──────────────────────────────────────
 
   async scrapeFallback(): Promise<ListingRaw[]> {
-    this.log('Using mock fallback data');
-    return generateMockListings({
-      sourceName: this.sourceName,
-      baseUrl: this.baseUrl,
-      count: 30,
-      priceMultiplier: 1.10,
-      yearMin: 2016,
-      sellerTypes: ['Yetkili Bayi', 'Yetkili Bayi', 'Galeri'],
-      allowedMakes: ['Peugeot', 'Citroen', 'Opel', 'Volkswagen', 'Fiat', 'Renault', 'BMW', 'Mercedes-Benz', 'Audi', 'Ford'],
-      descriptionTemplate: (make, model, year, _city) =>
-        `${year} ${make} ${model} Spoticar sertifikalı, 120 nokta kontrolünden geçmiş.`,
-    });
+    return [];
   }
 
   // ═══════════════════════════════════════════════════════════════════

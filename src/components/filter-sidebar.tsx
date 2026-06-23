@@ -55,7 +55,7 @@ function FilterContent({
   }, [aggregations])
 
   const yearMin = aggregations?.yearRange?.min || 1990
-  const yearMax = aggregations?.yearRange?.max || 2026
+  const yearMax = aggregations?.yearRange?.max || new Date().getFullYear() + 1
   const priceMin = aggregations?.priceRange?.min || 0
   const priceMax = aggregations?.priceRange?.max || 10000000
 

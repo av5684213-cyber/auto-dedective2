@@ -219,20 +219,27 @@ export abstract class BaseAdapter {
   /** Fetch detail page for a single listing */
   abstract getDetail(listingId: string): Promise<ListingRaw | null>;
 
-  /** Provide mock/fallback data when real scraping fails */
-  abstract scrapeFallback(): Promise<ListingRaw[]>;
+  /** Provide fallback listings when real scraping fails. Default: empty.
+   *
+   *  Subclasses MAY override this to provide a cached/stale snapshot from
+   *  the DB or a licensed feed. NEVER override this to produce mock/fake
+   *  data — that would pollute the production DB with fabricated listings.
+   */
+  async scrapeFallback(): Promise<ListingRaw[]> {
+    return [];
+  }
 
-  // ── Smart scrape with fallback ─────────────────────────────────
+  // ── Smart scrape (no mock fallback) ─────────────────────────────
 
   /**
-   * Smart search: tries real scraping first, falls back to mock data
-   * when the real site is unreachable or returns unexpected results.
+   * Smart search: tries real scraping. On failure or empty result,
+   * returns an empty AdapterResult (success:false, listings:[]).
+   * NO mock data is ever produced.
    */
   async scrape(filters?: SearchFilters): Promise<AdapterResult> {
     const start = Date.now();
 
     try {
-      // Attempt real scraping with a generous timeout (5 min for multi-page)
       const realResult = await Promise.race([
         this.search(filters ?? {}),
         new Promise<never>((_, reject) =>
@@ -244,33 +251,27 @@ export abstract class BaseAdapter {
         return realResult;
       }
 
-      // Real scraping returned 0 listings — fall through to fallback
       this.log(
-        `Real scraping returned 0 listings for "${this.sourceName}", using fallback`,
+        `Real scraping returned 0 listings for "${this.sourceName}"`,
         'warn',
       );
-    } catch (err) {
-      this.log(
-        `Real scraping failed for "${this.sourceName}": ${err instanceof Error ? err.message : String(err)}`,
-        'warn',
-      );
-    }
-
-    // Fallback to mock data
-    try {
-      const fallbackListings = await this.scrapeFallback();
-      return {
-        success: fallbackListings.length > 0,
-        listings: fallbackListings,
-        totalFound: fallbackListings.length,
-        durationMs: Date.now() - start,
-      };
-    } catch (fallbackErr) {
       return {
         success: false,
         listings: [],
         totalFound: 0,
-        error: fallbackErr instanceof Error ? fallbackErr.message : 'Both real and fallback scraping failed',
+        durationMs: Date.now() - start,
+      };
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      this.log(
+        `Real scraping failed for "${this.sourceName}": ${errMsg}`,
+        'warn',
+      );
+      return {
+        success: false,
+        listings: [],
+        totalFound: 0,
+        error: errMsg,
         durationMs: Date.now() - start,
       };
     }
@@ -402,7 +403,7 @@ export abstract class BaseAdapter {
       for (const line of lines) {
         if (line.startsWith('user-agent:')) {
           const agent = line.split(':')[1]?.trim();
-          isRelevantAgent = agent === '*' || agent === 'AraciKiyasBot';
+          isRelevantAgent = agent === '*' || agent === 'OtodedektifBot';
         }
 
         if (isRelevantAgent && line.startsWith('disallow:')) {
@@ -644,152 +645,3 @@ export abstract class BaseAdapter {
   }
 }
 
-// ═══════════════════════════════════════════════════════════════════
-// Mock Data Helpers (used by adapters for scrapeFallback)
-// ═══════════════════════════════════════════════════════════════════
-
-/** Pick a random element from an array */
-export function pick<T>(arr: readonly T[]): T {
-  return arr[Math.floor(Math.random() * arr.length)];
-}
-
-/** Pick a random element, with 30% chance of returning undefined (optional fields) */
-export function pickOptional<T>(arr: readonly T[]): T | undefined {
-  if (Math.random() < 0.3) return undefined;
-  return pick(arr);
-}
-
-/** Random integer in [min, max] inclusive */
-export function randInt(min: number, max: number): number {
-  return Math.floor(Math.random() * (max - min + 1)) + min;
-}
-
-/** Random float in [min, max), rounded to `decimals` places */
-export function randFloat(min: number, max: number, decimals = 0): number {
-  const val = Math.random() * (max - min) + min;
-  const factor = Math.pow(10, decimals);
-  return Math.round(val * factor) / factor;
-}
-
-/** Get models for a given make */
-export function getModelsForMake(make: string): string[] {
-  return MAKE_MODELS[make] ?? ['Bilinmiyor'];
-}
-
-/** Get a realistic district for a city */
-export function getDistrictForCity(city: string): string | undefined {
-  if (city === 'İstanbul') return pick(ISTANBUL_DISTRICTS);
-  if (city === 'Ankara') return pick(ANKARA_DISTRICTS);
-  if (city === 'İzmir') return pick(IZMIR_DISTRICTS);
-  return Math.random() < 0.4 ? 'Merkez' : undefined;
-}
-
-/** Generate a realistic fake listing URL for a given source */
-export function fakeListingUrl(
-  baseUrl: string,
-  make: string,
-  model: string,
-  year: number,
-): string {
-  const slug = `${make.toLowerCase().replace(/\s+/g, '-')}-${model.toLowerCase().replace(/\s+/g, '-')}-${year}`;
-  const id = randInt(1000000, 9999999);
-  return `${baseUrl}/ilan/vasita-araba-${slug}-${id}`;
-}
-
-/** Generate a realistic price adjusted by a multiplier for platform bias */
-export function generatePrice(baseMin: number, baseMax: number, multiplier = 1): number {
-  const raw = randInt(baseMin, baseMax);
-  const adjusted = Math.round(raw * multiplier);
-  // Round to nearest 1000
-  return Math.round(adjusted / 1000) * 1000;
-}
-
-/** Generate a realistic mileage for a given year */
-export function generateMileage(year: number): number | undefined {
-  const age = 2025 - year;
-  if (age <= 0) return Math.random() < 0.6 ? 0 : randInt(0, 5000);
-  const avgKmPerYear = randInt(10000, 25000);
-  const km = age * avgKmPerYear + randInt(-5000, 5000);
-  return Math.max(0, km);
-}
-
-/** Generate a list of mock listings with common logic */
-export function generateMockListings(opts: {
-  sourceName: string;
-  baseUrl: string;
-  count: number;
-  priceMultiplier?: number;
-  priceMin?: number;
-  priceMax?: number;
-  yearMin?: number;
-  yearMax?: number;
-  sellerTypes?: string[];
-  allowedMakes?: string[];
-  fuelBias?: string[];
-  bodyBias?: string[];
-  descriptionTemplate?: (make: string, model: string, year: number, city: string) => string;
-}): ListingRaw[] {
-  const {
-    sourceName,
-    baseUrl,
-    count,
-    priceMultiplier = 1,
-    priceMin = 500000,
-    priceMax = 8000000,
-    yearMin = 2010,
-    yearMax = 2025,
-    sellerTypes = SELLER_TYPES,
-    allowedMakes = TURKISH_MAKES,
-    fuelBias,
-    bodyBias,
-    descriptionTemplate,
-  } = opts;
-
-  const listings: ListingRaw[] = [];
-
-  for (let i = 0; i < count; i++) {
-    const make = pick(allowedMakes);
-    const models = getModelsForMake(make);
-    const model = pick(models);
-    const year = randInt(yearMin, yearMax);
-    const city = pick(TURKISH_CITIES);
-    const district = getDistrictForCity(city);
-    const mileage = Math.random() < 0.05 ? undefined : generateMileage(year);
-    const fuelType = fuelBias ? pick(fuelBias) : pickOptional(FUEL_TYPES);
-    const bodyType = bodyBias ? pick(bodyBias) : pickOptional(BODY_TYPES);
-    const price = generatePrice(priceMin, priceMax, priceMultiplier);
-
-    const listing: ListingRaw = {
-      sourceName,
-      sourceUrl: fakeListingUrl(baseUrl, make, model, year),
-      make,
-      model,
-      trim: Math.random() < 0.4 ? pick(models) : undefined,
-      year,
-      price,
-      currency: 'TRY',
-      mileageKm: mileage,
-      fuelType,
-      transmission: pickOptional(TRANSMISSIONS),
-      bodyType,
-      color: pickOptional(COLORS_TR),
-      city,
-      district,
-      sellerType: pick(sellerTypes),
-      imageUrl: `https://placehold.co/600x400?text=${encodeURIComponent(make)}+${encodeURIComponent(model)}`,
-      imageUrls: [
-        `https://placehold.co/600x400?text=${encodeURIComponent(make)}+${encodeURIComponent(model)}+1`,
-        `https://placehold.co/600x400?text=${encodeURIComponent(make)}+${encodeURIComponent(model)}+2`,
-        `https://placehold.co/600x400?text=${encodeURIComponent(make)}+${encodeURIComponent(model)}+3`,
-      ],
-      description: descriptionTemplate
-        ? descriptionTemplate(make, model, year, city)
-        : `${year} ${make} ${model}, ${city}'da satılık. Bakımları yapılmış, hasar kaydı yok.`,
-      isActive: true,
-    };
-
-    listings.push(listing);
-  }
-
-  return listings;
-}

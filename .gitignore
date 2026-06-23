@@ -68,3 +68,5 @@ worklog.md
 .vscode/
 *.swp
 *.swo
+# Bun lockfile (Vercel uses npm install)
+bun.lock

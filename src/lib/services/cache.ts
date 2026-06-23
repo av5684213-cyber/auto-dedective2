@@ -1,5 +1,5 @@
 // apps/scraper/src/cache.ts
-// AracıKıyas - Cache Service with optional Redis backend (falls back to in-memory)
+// Otodedektif - Cache Service with optional Redis backend (falls back to in-memory)
 
 interface CacheEntry<T = unknown> {
   value: T;
@@ -67,7 +67,7 @@ export class CacheService {
   private defaultTtl: number;
   private keyPrefix: string;
 
-  constructor(defaultTtl: number = DEFAULT_TTL, keyPrefix: string = 'aracikiyas:') {
+  constructor(defaultTtl: number = DEFAULT_TTL, keyPrefix: string = 'otodedektif:') {
     this.cache = new Map();
     this.stats = new Map();
     this.defaultTtl = defaultTtl;

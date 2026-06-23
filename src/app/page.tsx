@@ -1,5 +1,5 @@
 'use client'
-// AracıKıyas - Last update: 1781992700
+// Otodedektif - Last update: 1781992700
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -106,10 +106,30 @@ export default function Home() {
       if (f.limit) params.set('limit', f.limit.toString())
 
       const res = await fetch(`/api/listings?${params.toString()}`)
-      const data: SearchResult = await res.json()
-      setResults(data)
-      if (data.aggregations) {
-        setAggregations(data.aggregations)
+      if (!res.ok) {
+        console.error('Listings API returned non-OK status:', res.status)
+        setResults({
+          listings: [], total: 0, page: f.page || 1, limit: f.limit || 20, totalPages: 0,
+          aggregations: {
+            makes: [], cities: [], fuelTypes: [], transmissions: [], bodyTypes: [],
+            priceRange: { min: 0, max: 0 }, yearRange: { min: 0, max: 0 },
+            totalActive: 0, dealBreakdown: [],
+          },
+        })
+        return
+      }
+      const data = await res.json() as SearchResult
+      const safeData: SearchResult = {
+        listings: Array.isArray(data?.listings) ? data.listings : [],
+        total: typeof data?.total === 'number' ? data.total : 0,
+        page: typeof data?.page === 'number' ? data.page : (f.page || 1),
+        limit: typeof data?.limit === 'number' ? data.limit : (f.limit || 20),
+        totalPages: typeof data?.totalPages === 'number' ? data.totalPages : 0,
+        aggregations: data?.aggregations ?? null,
+      }
+      setResults(safeData)
+      if (safeData.aggregations) {
+        setAggregations(safeData.aggregations)
       }
     } catch (err) {
       console.error('Failed to fetch listings:', err)
@@ -209,8 +229,8 @@ export default function Home() {
           <div className="flex items-center gap-2">
             <Car className="h-6 w-6 text-teal-600" />
             <span className="text-lg font-extrabold">
-              <span className="text-teal-600">Aracı</span>
-              <span className="text-amber-500">Kıyas</span>
+              <span className="text-teal-600">Oto</span>
+              <span className="text-amber-500">dedektif</span>
             </span>
           </div>
 
@@ -308,7 +328,7 @@ export default function Home() {
         <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-muted-foreground">
           <div className="flex items-center gap-1.5">
             <Car className="h-3.5 w-3.5 text-teal-600" />
-            <span className="font-semibold text-teal-700">AracıKıyas</span>
+            <span className="font-semibold text-teal-700">Otodedektif</span>
             <span>© {new Date().getFullYear()}</span>
           </div>
           <p>

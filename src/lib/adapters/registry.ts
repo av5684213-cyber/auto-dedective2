@@ -1,16 +1,14 @@
-// apps/scraper/src/adapters/registry.ts
-// AracıKıyas - Adapter Registry: Centralized management of all scraping adapters
+// Otodedektif - Adapter Registry: Centralized management of all scraping adapters
+//
+// NOTE: This file is a thin wrapper around src/lib/adapters/index.ts.
+// The canonical adapter registry is ALL_ADAPTERS / ADAPTER_MAP in index.ts.
 
-import { BaseAdapter, type ListingRaw, type AdapterResult, type SearchFilters } from './base';
-import { LetgoAdapter } from './letgo';
+import { BaseAdapter, type AdapterResult, type SearchFilters } from './base';
+import { ALL_ADAPTERS, ADAPTER_MAP, ADAPTER_STATUSES, type AdapterStatusEntry } from './index';
 
 // ── Adapter Info ───────────────────────────────────────────────────────
 
-export interface AdapterInfo {
-  name: string;
-  displayName: string;
-  baseUrl: string;
-  isActive: boolean;
+export interface AdapterInfo extends AdapterStatusEntry {
   lastScrapedAt: Date | null;
   lastStatus: 'success' | 'failed' | 'never';
   lastItemsFound: number;
@@ -19,135 +17,102 @@ export interface AdapterInfo {
   totalScrapes: number;
   totalSuccesses: number;
   totalFailures: number;
+  isRegistered: boolean;
 }
 
-// ── All available adapters ─────────────────────────────────────────────
+// ── Registry Functions (delegates to index.ts) ────────────────────────
 
-/**
- * Adapter registry: maps source names to adapter instances.
- * Only adapters that can provide REAL data are included.
- */
-const ADAPTER_REGISTRY: Map<string, BaseAdapter> = new Map();
-
-// Register adapters
-ADAPTER_REGISTRY.set('letgo', new LetgoAdapter());
-
-// ── Registry Functions ─────────────────────────────────────────────────
-
-/**
- * Get an adapter by source name.
- * Returns undefined if no adapter is registered for the source.
- */
 export function getAdapter(sourceName: string): BaseAdapter | undefined {
-  return ADAPTER_REGISTRY.get(sourceName);
+  return ADAPTER_MAP[sourceName];
 }
 
-/**
- * Get all registered adapter instances.
- */
 export function getAllAdapters(): BaseAdapter[] {
-  return Array.from(ADAPTER_REGISTRY.values());
+  return ALL_ADAPTERS;
 }
 
-/**
- * Get all registered adapter source names.
- */
 export function getRegisteredSources(): string[] {
-  return Array.from(ADAPTER_REGISTRY.keys());
+  return Object.keys(ADAPTER_MAP);
 }
 
-/**
- * Check if a source name has a registered adapter.
- */
 export function isSourceRegistered(sourceName: string): boolean {
-  return ADAPTER_REGISTRY.has(sourceName);
+  return sourceName in ADAPTER_MAP;
 }
 
-/**
- * Get adapter info for all registered sources, including last scrape stats.
- * Queries the ScrapeLog table for statistics.
- */
 export async function getAllAdapterInfo(): Promise<AdapterInfo[]> {
   const { db } = await import('@/lib/db');
   const infos: AdapterInfo[] = [];
 
-  for (const [name, adapter] of ADAPTER_REGISTRY) {
-    // Get last scrape log for this source
-    const lastLog = await db.scrapeLog.findFirst({
-      where: { sourceName: name },
-      orderBy: { startTime: 'desc' },
-    });
+  for (const status of ADAPTER_STATUSES) {
+    const adapter = ADAPTER_MAP[status.name];
+    const isRegistered = !!adapter;
 
-    // Get total stats
-    const totalScrapes = await db.scrapeLog.count({
-      where: { sourceName: name },
-    });
+    if (!isRegistered) {
+      infos.push({
+        ...status,
+        lastScrapedAt: null, lastStatus: 'never',
+        lastItemsFound: 0, lastItemsSaved: 0, lastDurationMs: 0,
+        totalScrapes: 0, totalSuccesses: 0, totalFailures: 0,
+        isRegistered: false,
+      });
+      continue;
+    }
 
-    const totalSuccesses = await db.scrapeLog.count({
-      where: { sourceName: name, status: 'success' },
-    });
+    let lastLog: any = null;
+    let totalScrapes = 0;
+    let totalSuccesses = 0;
+    let totalFailures = 0;
 
-    const totalFailures = await db.scrapeLog.count({
-      where: { sourceName: name, status: 'failed' },
-    });
+    try {
+      lastLog = await db.scrapeLog.findFirst({
+        where: { sourceName: status.name },
+        orderBy: { startTime: 'desc' },
+      });
+      totalScrapes = await db.scrapeLog.count({ where: { sourceName: status.name } });
+      totalSuccesses = await db.scrapeLog.count({ where: { sourceName: status.name, status: 'success' } });
+      totalFailures = await db.scrapeLog.count({ where: { sourceName: status.name, status: 'failed' } });
+    } catch (e) { /* ignore DB errors */ }
 
     infos.push({
-      name,
-      displayName: adapter.sourceName,
-      baseUrl: adapter.baseUrl,
-      isActive: true,
+      ...status,
       lastScrapedAt: lastLog ? lastLog.startTime : null,
       lastStatus: lastLog ? (lastLog.status as 'success' | 'failed') : 'never',
       lastItemsFound: lastLog?.itemsFound ?? 0,
       lastItemsSaved: lastLog?.itemsSaved ?? 0,
       lastDurationMs: lastLog?.durationMs ?? 0,
-      totalScrapes,
-      totalSuccesses,
-      totalFailures,
+      totalScrapes, totalSuccesses, totalFailures,
+      isRegistered: true,
     });
   }
 
   return infos;
 }
 
-/**
- * Run a specific adapter by source name.
- * Throws if the source is not registered.
- */
 export async function runRegisteredAdapter(
   sourceName: string,
   filters?: SearchFilters,
 ): Promise<AdapterResult> {
-  const adapter = ADAPTER_REGISTRY.get(sourceName);
+  const adapter = ADAPTER_MAP[sourceName];
   if (!adapter) {
     throw new Error(`No adapter registered for source: ${sourceName}`);
   }
   return adapter.scrape(filters);
 }
 
-/**
- * Run all registered adapters sequentially.
- * Returns a map of source name → AdapterResult.
- */
 export async function runAllRegisteredAdapters(
   filters?: SearchFilters,
 ): Promise<Map<string, AdapterResult>> {
   const results = new Map<string, AdapterResult>();
-
-  for (const [name, adapter] of ADAPTER_REGISTRY) {
+  for (const [name, adapter] of Object.entries(ADAPTER_MAP)) {
     try {
       const result = await adapter.scrape(filters);
       results.set(name, result);
     } catch (error) {
       results.set(name, {
-        success: false,
-        listings: [],
-        totalFound: 0,
+        success: false, listings: [], totalFound: 0,
         error: error instanceof Error ? error.message : 'Unknown error',
         durationMs: 0,
       });
     }
   }
-
   return results;
 }

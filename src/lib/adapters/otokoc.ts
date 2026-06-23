@@ -1,4 +1,4 @@
-import { BaseAdapter, generateMockListings, type SearchFilters, type AdapterResult, type ListingRaw } from './base';
+import { BaseAdapter, type SearchFilters, type AdapterResult, type ListingRaw } from './base';
 import { RateLimiter, getRateLimiter } from '@/lib/utils/rate-limiter';
 import { TURKISH_MAKES, MAKE_MODELS } from '@/lib/constants';
 import * as cheerio from 'cheerio';
@@ -180,17 +180,7 @@ export class OtokocAdapter extends BaseAdapter {
   // ── Fallback with mock data ──────────────────────────────────────
 
   async scrapeFallback(): Promise<ListingRaw[]> {
-    this.log('Using mock fallback data');
-    return generateMockListings({
-      sourceName: this.sourceName,
-      baseUrl: this.baseUrl,
-      count: 55,
-      priceMultiplier: 1.03,
-      yearMin: 2013,
-      sellerTypes: ['Yetkili Bayi', 'Yetkili Bayi', 'Galeri'],
-      descriptionTemplate: (make, model, year, _city) =>
-        `${year} ${make} ${model} Otokoç garantili, bakımları yapılmış, sorunsuz araç.`,
-    });
+    return [];
   }
 
   // ═══════════════════════════════════════════════════════════════════

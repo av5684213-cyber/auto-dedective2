@@ -1,4 +1,4 @@
-import { BaseAdapter, generateMockListings, type SearchFilters, type AdapterResult, type ListingRaw } from './base';
+import { BaseAdapter, type SearchFilters, type AdapterResult, type ListingRaw } from './base';
 import { RateLimiter, getRateLimiter } from '@/lib/utils/rate-limiter';
 import { TURKISH_MAKES, MAKE_MODELS } from '@/lib/constants';
 import * as cheerio from 'cheerio';
@@ -199,20 +199,7 @@ export class HasarliArabaAdapter extends BaseAdapter {
   // ── Fallback with mock data ──────────────────────────────────────
 
   async scrapeFallback(): Promise<ListingRaw[]> {
-    this.log('Using mock fallback data');
-    return generateMockListings({
-      sourceName: this.sourceName,
-      baseUrl: this.baseUrl,
-      count: 25,
-      priceMultiplier: 0.20,
-      priceMin: 40000,
-      priceMax: 1800000,
-      yearMin: 2010,
-      yearMax: 2024,
-      sellerTypes: ['Galeri', 'Sahibinden', 'Sahibinden'],
-      descriptionTemplate: (make, model, year, _city) =>
-        `${year} ${make} ${model} hasar kayıtlı, trafik sigortası hasarlı. Detaylı bilgi için arayın.`,
-    });
+    return [];
   }
 
   // ═══════════════════════════════════════════════════════════════════

@@ -45,8 +45,28 @@ export function StatsDashboard() {
   const fetchStats = useCallback(async () => {
     try {
       const res = await fetch('/api/admin/stats')
+      if (!res.ok) {
+        console.error('Stats API returned non-OK status:', res.status)
+        setStats(null)
+        return
+      }
       const data = await res.json()
-      setStats(data)
+      const safeStats: StatsData = {
+        totalActive: typeof data?.totalActive === 'number' ? data.totalActive : 0,
+        listingsPerSource: Array.isArray(data?.listingsPerSource) ? data.listingsPerSource : [],
+        listingsPerMake: Array.isArray(data?.listingsPerMake) ? data.listingsPerMake : [],
+        listingsPerCity: Array.isArray(data?.listingsPerCity) ? data.listingsPerCity : [],
+        dealTagDistribution: Array.isArray(data?.dealTagDistribution) ? data.dealTagDistribution : [],
+        avgPriceByMake: Array.isArray(data?.avgPriceByMake) ? data.avgPriceByMake : [],
+        recentScrapeLogs: Array.isArray(data?.recentScrapeLogs) ? data.recentScrapeLogs : [],
+        cacheStats: {
+          keys: data?.cacheStats?.keys ?? 0,
+          hits: data?.cacheStats?.hits ?? 0,
+          misses: data?.cacheStats?.misses ?? 0,
+          hitRate: data?.cacheStats?.hitRate ?? 0,
+        },
+      }
+      setStats(safeStats)
     } catch (err) {
       console.error('Failed to fetch stats:', err)
     } finally {
