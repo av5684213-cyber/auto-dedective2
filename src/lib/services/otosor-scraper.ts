@@ -221,7 +221,7 @@ async function fetchListingUrls(maxPages: number): Promise<string[]> {
 
 // ── Fetch detail page and parse price ───────────────────────────────────
 
-const PRICE_RE = /([0-9]{1,3}(?:\.[0-9]{3})+)\s*₺/;
+const PRICE_RE = /"price"\s*:\s*"?(\d{5,})"?/;
 
 async function fetchAndParseOne(url: string, slugData: ParsedSlug): Promise<ListingRaw | null> {
   try {
