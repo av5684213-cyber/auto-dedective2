@@ -37,7 +37,7 @@ export async function bulkScrapeFordikinciel(maxListings: number = 200) {
   for (let p = 1; p <= 20; p++) {
     try {
       const res = await axios.get(`${BASE_URL}/araba-fiyatlari?p=${p}`, cfg());
-      const matches = res.data.match(/href="(/[^"]*-araba-\d+)"/g) || [];
+      const matches = res.data.match(/href="(\/[^"]*-araba-\d+)"/g) || [];
       matches.forEach((m: string) => { const url = m.match(/href="([^"]+)"/)?.[1]; if (url) allUrls.add(`${BASE_URL}${url}`); });
     } catch { break; }
   }
