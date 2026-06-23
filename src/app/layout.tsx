@@ -19,10 +19,16 @@ export const metadata: Metadata = {
   description: "Tüm ikinci el araç platformlarını tek aramada karşılaştırın. En iyi fırsatları bulun, fiyat analizi yapın.",
   keywords: ["ikinci el", "araç", "otomobil", "kıyasla", "fiyat", "sahibinden", "arabam", "meta-arama"],
   authors: [{ name: "Otodedektif" }],
+  icons: {
+    icon: "/icon.png",
+    shortcut: "/favicon.ico",
+    apple: "/icon.png",
+  },
   openGraph: {
     title: "Otodedektif",
     description: "Tüm İkinci El Araç İlanları Tek Bir Adreste",
     type: "website",
+    images: ["/icon.png"],
   },
 };
 
