@@ -34,7 +34,14 @@ export function FavoritesPanel() {
   const [selectedForCompare, setSelectedForCompare] = useState<string[]>([])
   const [compareOpen, setCompareOpen] = useState(false)
 
-  // Fetch favorited listings
+  // Fetch favorited listings.
+  //
+  // CRITICAL: We use favoriteIds.join(',') as the dependency key (a primitive
+  // string) instead of favoriteIds (an array). This prevents infinite loops
+  // because join(',') only changes when the actual IDs change, not when the
+  // array reference changes.
+  const favoriteIdsKey = favoriteIds.join(',')
+
   const fetchListings = useCallback(async () => {
     if (!hydrated || favoriteIds.length === 0) {
       setListings([])
@@ -62,16 +69,19 @@ export function FavoritesPanel() {
     } finally {
       setLoading(false)
     }
-  }, [favoriteIds, hydrated])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [favoriteIdsKey, hydrated])
 
   useEffect(() => {
     fetchListings()
   }, [fetchListings])
 
-  // Filter out selected IDs that no longer exist in favorites
+  // Filter out selected IDs that no longer exist in favorites.
+  // Uses favoriteIdsKey (primitive string) to avoid re-render loops.
   useEffect(() => {
     setSelectedForCompare((prev) => prev.filter((id) => favoriteIds.includes(id)))
-  }, [favoriteIds])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [favoriteIdsKey])
 
   const handleToggleCompare = (id: string) => {
     setSelectedForCompare((prev) => {

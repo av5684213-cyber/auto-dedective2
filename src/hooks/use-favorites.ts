@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 
 // ── Favorites Storage (localStorage-based, no auth required) ────────────
 //
@@ -107,7 +107,10 @@ export function useFavorites() {
     writeToStorage([])
   }, [])
 
-  const favoriteIds = favorites.map((f) => f.id)
+  // useMemo prevents favoriteIds from creating a new array reference on
+  // every render, which would cause infinite re-render loops in consumers
+  // that depend on favoriteIds (e.g. FavoritesPanel's fetchListings).
+  const favoriteIds = useMemo(() => favorites.map((f) => f.id), [favorites])
 
   return {
     favorites,
