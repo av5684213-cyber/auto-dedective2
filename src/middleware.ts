@@ -29,6 +29,13 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
+  // Public admin read endpoints (safe — only aggregate stats from fallback data)
+  // These are used by the dashboard UI which has no admin auth.
+  const PUBLIC_READ_PATHS = ['/api/admin/stats', '/api/admin/adapters'];
+  if (PUBLIC_READ_PATHS.some((p) => pathname === p)) {
+    return NextResponse.next();
+  }
+
   const acceptedTokens: string[] = [];
   if (process.env.ADMIN_TOKEN && process.env.ADMIN_TOKEN.length >= 16) {
     acceptedTokens.push(process.env.ADMIN_TOKEN);

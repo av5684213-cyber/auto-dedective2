@@ -52,5 +52,10 @@ export function transformListing(listing: Record<string, unknown>): ListingWithS
     insuranceCostAnnual: (listing.insuranceCostAnnual as number) ?? null,
     maintenanceCostAnnual: (listing.maintenanceCostAnnual as number) ?? null,
     taxCostAnnual: (listing.taxCostAnnual as number) ?? null,
+    fuelConsumptionCity: (listing.fuelConsumptionCity as number) ?? null,
+    fuelConsumptionHighway: (listing.fuelConsumptionHighway as number) ?? null,
+    fuelConsumptionCombined: (listing.fuelConsumptionCombined as number) ?? null,
+    fuelConsumptionUnit: (listing.fuelConsumptionUnit as string) ?? null,
+    fuelConsumptionSource: (listing.fuelConsumptionSource as string) ?? null,
   };
 }

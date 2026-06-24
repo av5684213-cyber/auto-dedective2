@@ -2,13 +2,13 @@
 // Otodedektif - Last update: 2026-06-23
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Search, BarChart3, Car, Heart } from 'lucide-react'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { SearchBar } from '@/components/search-bar'
 import { FilterSidebar, FilterButton } from '@/components/filter-sidebar'
 import { ListingGrid } from '@/components/listing-grid'
-import { ListingDetail } from '@/components/listing-detail'
 import { StatsDashboard } from '@/components/stats-dashboard'
 import { FavoritesPanel } from '@/components/favorites-panel'
 import { UserMenu } from '@/components/auth/user-menu'
@@ -68,14 +68,13 @@ function updateUrl(filters: SearchFilters, tab: string) {
 }
 
 export default function Home() {
+  const router = useRouter()
   const [activeTab, setActiveTab] = useState<'search' | 'dashboard' | 'favorites'>('search')
   const { count: favCount, hydrated: favHydrated } = useFavorites()
   const [filters, setFilters] = useState<SearchFilters>(DEFAULT_FILTERS)
   const [results, setResults] = useState<SearchResult | null>(null)
   const [loading, setLoading] = useState(true)
   const [aggregations, setAggregations] = useState<SearchAggregations | null>(null)
-  const [selectedListing, setSelectedListing] = useState<ListingWithScore | null>(null)
-  const [detailOpen, setDetailOpen] = useState(false)
   const [filterDrawerOpen, setFilterDrawerOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
 
@@ -192,18 +191,13 @@ export default function Home() {
   }
 
   const handleListingClick = (listing: ListingWithScore) => {
-    setSelectedListing(listing)
-    setDetailOpen(true)
-  }
-
-  const handleDetailClose = () => {
-    setDetailOpen(false)
+    // Popup yerine doğrudan ilan detay sayfasına yönlendir
+    router.push(`/ilan/${listing.id}`)
   }
 
   const handleComparableClick = (listing: ListingWithScore) => {
-    setSelectedListing(listing)
-    // Re-fetch detail for the new listing
-    setDetailOpen(true)
+    // Benzer ilan tıklaması da detay sayfasına gider
+    router.push(`/ilan/${listing.id}`)
   }
 
   const activeFilterCount = useMemo(() => {
@@ -366,14 +360,6 @@ export default function Home() {
           </p>
         </div>
       </footer>
-
-      {/* Listing Detail Modal */}
-      <ListingDetail
-        listing={selectedListing}
-        open={detailOpen}
-        onClose={handleDetailClose}
-        onComparableClick={handleComparableClick}
-      />
     </div>
   )
 }

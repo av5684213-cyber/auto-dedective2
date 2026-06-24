@@ -217,47 +217,8 @@ export async function GET(request: Request) {
       console.warn('[API /listings] DB query failed, will use fallback:', dbError);
     }
 
-    // DB empty/error → live scrape → static fallback
+    // DB empty/error → static fallback (live scrape disabled for preview speed)
     if (total === 0 || dbError) {
-      // 1. Live sitemap scrape
-      try {
-        const liveListings = await liveScrapeLetgo(filters, limit);
-        if (liveListings.length > 0) {
-          const transformedLive: ListingWithScore[] = liveListings.map((l) => ({
-            id: `letgo-${l.sourceUrl.match(/iid-(\d+)/)?.[1] ?? ''}`,
-            sourceName: l.sourceName, sourceUrl: l.sourceUrl,
-            make: l.make, model: l.model, trim: l.trim ?? null,
-            year: l.year, price: l.price,
-            mileageKm: l.mileageKm ?? null,
-            fuelType: l.fuelType ?? null, transmission: l.transmission ?? null,
-            bodyType: l.bodyType ?? null, color: l.color ?? null,
-            city: l.city ?? null, district: l.district ?? null,
-            sellerType: l.sellerType ?? null,
-            imageUrl: l.imageUrl ?? null, imageUrls: l.imageUrls ?? [],
-            description: l.description ?? null,
-            firstSeenAt: new Date().toISOString(),
-            lastSeenAt: new Date().toISOString(),
-            estimatedValue: null, confidence: 'insufficient',
-            dealScore: null, dealTag: 'Değerlendirilemedi', comparableCount: 0,
-            annualDepreciationPercent: null, annualDepreciationAmount: null,
-            ownershipCostAnnual: null, fuelCostAnnual: null,
-            insuranceCostAnnual: null, maintenanceCostAnnual: null,
-            taxCostAnnual: null,
-          }));
-
-          const liveResult: SearchResult = {
-            listings: transformedLive, total: transformedLive.length,
-            page: 1, limit, totalPages: 1,
-            aggregations: await buildAggregationsFromListings(transformedLive),
-          };
-          await cache.set(cacheKey, liveResult);
-          return NextResponse.json({ ...liveResult, _live: true });
-        }
-      } catch (err) {
-        console.error('[API /listings] Live sitemap scrape failed:', err);
-      }
-
-      // 2. Static fallback
       const fallbackResult = queryFallbackListings(filters);
       const result: SearchResult = {
         listings: fallbackResult.listings as unknown as ListingWithScore[],
@@ -265,7 +226,7 @@ export async function GET(request: Request) {
         limit: fallbackResult.limit, totalPages: fallbackResult.totalPages,
         aggregations: fallbackResult.aggregations,
       };
-      await cache.set(cacheKey, result);
+      await cache.set(cacheKey, result, 60_000); // short TTL — 1 min — so filter changes reflect quickly
       return NextResponse.json({ ...result, _fallback: true });
     }
 

@@ -51,6 +51,16 @@ model Listing {
   maintenanceCostAnnual      Float? @map("maintenance_cost_annual")
   taxCostAnnual              Float? @map("tax_cost_annual")
 
+  // Fabrika yakıt tüketim verileri (L/100km veya elektrikli için kWh/100km)
+  // Kaynak: üretici WLTP/NEDC değerleri; yoksa null bırakılır (component tahmini kullanır).
+  fuelConsumptionCity      Float? @map("fuel_consumption_city")
+  fuelConsumptionHighway   Float? @map("fuel_consumption_highway")
+  fuelConsumptionCombined  Float? @map("fuel_consumption_combined")
+  // Enerji tüketim birimi: "L" (litre, ICE/LPG/Hibrit için) ya da "kWh" (elektrikli için)
+  fuelConsumptionUnit      String? @default("L") @map("fuel_consumption_unit")
+  // Fabrika verisi mi yoksa tahmini mi? ("factory" | "estimated")
+  fuelConsumptionSource    String? @default("factory") @map("fuel_consumption_source")
+
   priceHistory    PriceHistory[]
   favorites       UserFavorite[]
   duplicateGroupId String? @map("duplicate_group_id")
@@ -134,4 +144,30 @@ model UserFavorite {
   @@index([userId])
   @@index([listingId])
   @@map("user_favorites")
+}
+
+// Fabrika yakıt tüketim referans tablosu — marka/model/yıl/yakıt kombinasyonuna göre
+// üretici açıkladığı WLTP/NEDC değerleri. Listing.fuelConsumption* boşsa bu tabloya bakılır.
+model VehicleFuelSpec {
+  id                  String   @id @default(cuid())
+  make                String   @map("make")
+  model               String   @map("model")
+  // Belirli bir trim/yıl aralığı için olabilir; yearFrom/yearEnd null = tümü
+  yearFrom            Int?     @map("year_from")
+  yearEnd             Int?     @map("year_end")
+  fuelType            String   @map("fuel_type")  // "Benzin" | "Dizel" | "LPG" | "Hybrid" | "Elektrik" | "Benzin + LPG"
+  engineDisplacementCc Int?    @map("engine_displacement_cc")
+  // Tüketim değerleri — ICE için L/100km, EV için kWh/100km
+  consumptionCity     Float?   @map("consumption_city")
+  consumptionHighway  Float?   @map("consumption_highway")
+  consumptionCombined Float?   @map("consumption_combined")
+  unit                String   @default("L") @map("unit") // "L" | "kWh"
+  // Veri kaynağı: "WLTP" | "NEDC" | "manufacturer" | "estimated"
+  source              String   @default("WLTP") @map("source")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  @@unique([make, model, yearFrom, yearEnd, fuelType, engineDisplacementCc])
+  @@index([make, model])
+  @@index([make, model, fuelType])
+  @@map("vehicle_fuel_specs")
 }

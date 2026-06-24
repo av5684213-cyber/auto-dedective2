@@ -2,6 +2,8 @@
 // Calculates total cost of ownership for Turkish second-hand car market
 
 import { db } from '@/lib/db';
+import { getVehicleFuelConsumption } from '@/lib/services/vehicle-fuel-specs';
+import { getFuelPrice, type FuelPriceType } from '@/lib/services/fuel-prices';
 
 // ── Types ──────────────────────────────────────────────────────────────
 
@@ -793,4 +795,111 @@ function estimateEngineDisplacement(make: string, model: string): number {
 
   // Default: 1600cc (most common in Turkey)
   return DEFAULT_ENGINE_CC;
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// İL BAZLI + FABRİKA VERİLİ YAKIT MALİYETİ HESAPLAMASI
+// ═══════════════════════════════════════════════════════════════════════
+//
+// Yukarıdaki calculateFuelCost() ulusal ortalama + yakıt tipi tahmini kullanır
+// (batch DB güncellemeleri için iyidir).
+//
+// Aşağıdaki estimateFuelCostByCity() ise:
+//   - Aracın fabrika yakıt tüketim verisini kullanır (WLTP/NEDC)
+//   - Seçilen ildeki güncel yakıt fiyatını kullanır
+//   - Component-driven yakıt maliyeti hesaplaması için tasarlanmıştır
+
+export interface FuelCostByCityInput {
+  make: string;
+  model: string;
+  year: number;
+  fuelType: string | null;
+  city: string;
+  annualKm: number;
+  // Listing kaydında fabrika verisi varsa kullanılır
+  fuelConsumptionCity?: number | null;
+  fuelConsumptionHighway?: number | null;
+  fuelConsumptionCombined?: number | null;
+  fuelConsumptionUnit?: string | null;
+  fuelConsumptionSource?: string | null;
+}
+
+export interface FuelCostByCityResult {
+  annualCost: number;
+  monthlyCost: number;
+  annualConsumption: number; // L veya kWh
+  consumption: {
+    city: number | null;
+    highway: number | null;
+    combined: number;
+    unit: 'L' | 'kWh';
+    source: 'factory' | 'estimated';
+    isEstimated: boolean;
+  };
+  fuelPrice: {
+    price: number;
+    unit: 'L' | 'kWh';
+    fuelType: FuelPriceType;
+    source: 'epdk' | 'fallback';
+    fetchedAt: string;
+  };
+  city: string;
+}
+
+/**
+ * İl bazlı + fabrika verisiyle yakıt maliyeti hesaplar.
+ *
+ * Şu hesaplama yapılır:
+ *   yıllık yakıt maliyeti = (yıllık km / 100) × combined tüketim × il bazlı fiyat
+ *
+ * @returns FuelCostByCityResult — yıllık/aylık maliyet + tüm ara değerler
+ */
+export async function estimateFuelCostByCity(input: FuelCostByCityInput): Promise<FuelCostByCityResult> {
+  const consumption = await getVehicleFuelConsumption({
+    make: input.make,
+    model: input.model,
+    year: input.year,
+    fuelType: input.fuelType,
+    fuelConsumptionCity: input.fuelConsumptionCity ?? null,
+    fuelConsumptionHighway: input.fuelConsumptionHighway ?? null,
+    fuelConsumptionCombined: input.fuelConsumptionCombined ?? null,
+    fuelConsumptionUnit: input.fuelConsumptionUnit ?? null,
+    fuelConsumptionSource: input.fuelConsumptionSource ?? null,
+  });
+
+  // Yakıt tipi normalize → FuelPriceType
+  const fuelTypeStr = (input.fuelType || 'Benzin').toLowerCase();
+  let fuelType: FuelPriceType = 'Benzin';
+  if (fuelTypeStr.includes('dizel') || fuelTypeStr.includes('diesel')) fuelType = 'Dizel';
+  else if (fuelTypeStr.includes('elektrik')) fuelType = 'Elektrik';
+  else if (fuelTypeStr.includes('hybrid') || fuelTypeStr.includes('hibrit')) fuelType = 'Hybrid';
+  else if (fuelTypeStr === 'lpg' || fuelTypeStr === 'otogaz') fuelType = 'LPG';
+  else if (fuelTypeStr.includes('lpg') && fuelTypeStr.includes('benzin')) fuelType = 'LPG';
+
+  const fuelPrice = await getFuelPrice(input.city, fuelType);
+
+  const annualConsumption = (input.annualKm / 100) * consumption.combined;
+  const annualCost = annualConsumption * fuelPrice.price;
+
+  return {
+    annualCost: Math.round(annualCost),
+    monthlyCost: Math.round(annualCost / 12),
+    annualConsumption: Math.round(annualConsumption * 10) / 10,
+    consumption: {
+      city: consumption.city,
+      highway: consumption.highway,
+      combined: consumption.combined,
+      unit: consumption.unit,
+      source: consumption.source,
+      isEstimated: consumption.isEstimated,
+    },
+    fuelPrice: {
+      price: fuelPrice.price,
+      unit: fuelPrice.unit,
+      fuelType: fuelPrice.fuelType,
+      source: fuelPrice.source,
+      fetchedAt: fuelPrice.fetchedAt,
+    },
+    city: fuelPrice.city,
+  };
 }

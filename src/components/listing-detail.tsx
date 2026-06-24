@@ -23,6 +23,7 @@ import { PriceDisplay, formatPrice } from '@/components/price-display'
 import { StarRating } from '@/components/star-rating'
 import { ShareButton } from '@/components/share-button'
 import { LoanCalculator } from '@/components/loan-calculator'
+import { FuelCostCalculator } from '@/components/fuel-cost-calculator'
 import { DescriptionSummary } from '@/components/description-summary'
 import { useFavorites } from '@/hooks/use-favorites'
 import { SOURCE_PLATFORMS, DEAL_TAG_CONFIG } from '@/lib/constants'
@@ -450,6 +451,17 @@ export function ListingDetail({ listing, open, onClose, onComparableClick }: Lis
                   </div>
                 </div>
               )}
+
+              <Separator />
+
+              {/* Yakıt Maliyeti Hesaplama — fabrika verisi + il bazlı güncel fiyat */}
+              <div className="space-y-3">
+                <FuelCostCalculator
+                  listingId={listing.id}
+                  defaultCity={detail.city}
+                  fuelType={detail.fuelType}
+                />
+              </div>
 
               <Separator />
 

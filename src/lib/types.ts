@@ -93,6 +93,12 @@ export interface ListingWithScore {
   insuranceCostAnnual?: number | null;
   maintenanceCostAnnual?: number | null;
   taxCostAnnual?: number | null;
+  // Fabrika yakıt tüketim verileri
+  fuelConsumptionCity?: number | null;
+  fuelConsumptionHighway?: number | null;
+  fuelConsumptionCombined?: number | null;
+  fuelConsumptionUnit?: string | null;
+  fuelConsumptionSource?: string | null;
 }
 
 export interface SearchAggregations {
