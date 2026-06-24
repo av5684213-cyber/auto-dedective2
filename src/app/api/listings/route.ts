@@ -24,7 +24,7 @@ function parseFilters(searchParams: URLSearchParams): SearchFilters {
       priceMin: undefined, priceMax: undefined, mileageMax: undefined,
       fuelType: undefined, transmission: undefined, bodyType: undefined,
       city: undefined, sellerType: undefined, dealTag: undefined,
-      sortBy: 'newest', page: 1, limit: 20,
+      sortBy: 'deal_score_desc', page: 1, limit: 20,
     } as ListingsQuery,
     'listingsQuery',
   );

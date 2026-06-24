@@ -16,7 +16,7 @@ import { useFavorites } from '@/hooks/use-favorites'
 import type { SearchFilters, SearchResult, ListingWithScore, SearchAggregations } from '@/lib/types'
 
 const DEFAULT_FILTERS: SearchFilters = {
-  sortBy: 'newest',
+  sortBy: 'deal_score_desc',
   page: 1,
   limit: 20,
 }
@@ -59,7 +59,7 @@ function updateUrl(filters: SearchFilters, tab: string) {
   if (filters.city) params.set('city', filters.city)
   if (filters.sellerType) params.set('sellerType', filters.sellerType)
   if (filters.dealTag) params.set('dealTag', filters.dealTag)
-  if (filters.sortBy && filters.sortBy !== 'newest') params.set('sortBy', filters.sortBy)
+  if (filters.sortBy && filters.sortBy !== 'deal_score_desc') params.set('sortBy', filters.sortBy)
   if (filters.page && filters.page > 1) params.set('page', filters.page.toString())
   if (tab !== 'search') params.set('tab', tab)
   const qs = params.toString()
@@ -220,7 +220,7 @@ export default function Home() {
     if (filters.city) count++
     if (filters.sellerType) count++
     if (filters.dealTag) count++
-    if (filters.sortBy && filters.sortBy !== 'newest') count++
+    if (filters.sortBy && filters.sortBy !== 'deal_score_desc') count++
     return count
   }, [filters])
 
