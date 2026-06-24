@@ -317,9 +317,6 @@ export function ListingDetail({ listing, open, onClose, onComparableClick }: Lis
                 </Button>
               </div>
 
-              {/* Kredi Hesaplayıcı */}
-              <LoanCalculator price={detail.price} compact />
-
               <Separator />
 
               {/* Deal Analysis */}
@@ -535,6 +532,11 @@ export function ListingDetail({ listing, open, onClose, onComparableClick }: Lis
               <div className="flex flex-wrap gap-4 text-xs text-muted-foreground pt-2">
                 <span>İlk görülme: {formatDate(detail.firstSeenAt)}</span>
                 <span>Son güncelleme: {formatDate(detail.lastSeenAt)}</span>
+              </div>
+
+              {/* Kredi Hesaplayıcı — en altta */}
+              <div className="pt-2">
+                <LoanCalculator price={detail.price} compact />
               </div>
             </div>
           </div>
