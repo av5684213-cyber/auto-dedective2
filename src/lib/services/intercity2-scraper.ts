@@ -107,6 +107,22 @@ export async function bulkScrapeIntercity2(maxListings: number = 200): Promise<{
           const transmission = String(d.sanziman || '') || null;
           const km = parseKm(String(d.km || ''));
           const city = String(d.bolge || '').toLowerCase() || null;
+          const color = String(d.renk_filtre || d.renk || '').toLowerCase() || null;
+
+          // Ek teknik bilgiler — description'a göm
+          const motorHacmi = String(d.motor_hacmi || '');
+          const motorGucu = String(d.motor_gucu || '');
+          const kasko = String(d.kasko_degeri || '');
+          const mtv = String(d.donemlik_mtv_tutari || '');
+          const ekBilgiler = String(d.ek_bilgiler || '');
+
+          let descParts: string[] = [];
+          if (motorHacmi) descParts.push(`Motor Hacmi: ${motorHacmi} cc`);
+          if (motorGucu) descParts.push(`Motor Gücü: ${motorGucu} HP`);
+          if (kasko) descParts.push(`Kasko Değeri: ${parseInt(kasko).toLocaleString('tr-TR')} TL`);
+          if (mtv) descParts.push(`MTV: ${parseInt(mtv).toLocaleString('tr-TR')} TL/yıl`);
+          if (ekBilgiler) descParts.push(ekBilgiler);
+          const description = descParts.join('\n') || undefined;
 
           let img = String(d.resim || '');
           // Intercity2 stores image filenames in API, served at /arac-resimleri/{filename}
@@ -120,16 +136,17 @@ export async function bulkScrapeIntercity2(maxListings: number = 200): Promise<{
             sourceName: 'intercity2',
             sourceUrl: `${BASE_URL}/arac/${no}`,
             vin: d.sasi_no || undefined,
-            make, model, trim: undefined,
+            make, model,
+            trim: String(d.model || '').replace(d.model_filtre || '', '').trim() || undefined,
             year, price, currency: 'TRY',
             mileageKm: km, fuelType: fuel || undefined,
             transmission: transmission || undefined,
-            bodyType: undefined, color: String(d.renk || '').toLowerCase() || undefined,
+            bodyType: undefined, color,
             city, district: undefined,
             sellerType: 'Galeri',
             imageUrl: img || undefined,
             imageUrls: img ? [img] : [],
-            description: String(d.ek_bilgiler || '') || undefined,
+            description,
           });
         } catch (err) {
           // Continue on error

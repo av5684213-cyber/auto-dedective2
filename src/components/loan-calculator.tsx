@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { Calculator, TrendingDown } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -25,10 +25,18 @@ interface LoanCalculatorProps {
 const turkishFormatter = new Intl.NumberFormat('tr-TR')
 
 export function LoanCalculator({ price, compact = false }: LoanCalculatorProps) {
-  const [vehiclePrice, setVehiclePrice] = useState(price?.toString() || '500000')
+  const [vehiclePrice, setVehiclePrice] = useState(price ? Math.round(price).toString() : '500000')
   const [downPayment, setDownPayment] = useState('0') // peşinat
   const [interestRate, setInterestRate] = useState('2.59') // aylık faiz %
   const [termMonths, setTermMonths] = useState('36') // vade (ay)
+
+  // price prop değişince vehiclePrice'ı güncelle
+  useEffect(() => {
+    if (price) {
+      setVehiclePrice(Math.round(price).toString())
+      setDownPayment('0')
+    }
+  }, [price])
 
   const results = useMemo(() => {
     const price = parseFloat(vehiclePrice) || 0
