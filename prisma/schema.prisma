@@ -37,14 +37,12 @@ model Listing {
   isActive        Boolean  @default(true) @map("is_active")
   isDeleted       Boolean  @default(false) @map("is_deleted")
 
-  // Değerleme ve Fırsat Analizi
   estimatedValue       Float?   @map("estimated_value")
-  confidence           String?  @map("confidence") // "high", "medium", "low", "insufficient"
-  dealScore            Float?   @map("deal_score") // -1 ile 1 arası
-  dealTag              String?  @map("deal_tag") // "Harika Fırsat", "İyi Fiyat", "Piyasa Fiyatı", "Piyasa Üstü", "Pahalı", "Değerlendirilemedi"
+  confidence           String?  @map("confidence")
+  dealScore            Float?   @map("deal_score")
+  dealTag              String?  @map("deal_tag")
   comparableCount      Int      @default(0) @map("comparable_count")
 
-  // Sahip Olma Maliyeti
   annualDepreciationPercent Float? @map("annual_depreciation_percent")
   annualDepreciationAmount   Float? @map("annual_depreciation_amount")
   ownershipCostAnnual        Float? @map("ownership_cost_annual")
@@ -53,7 +51,6 @@ model Listing {
   maintenanceCostAnnual      Float? @map("maintenance_cost_annual")
   taxCostAnnual              Float? @map("tax_cost_annual")
 
-  // İlişkiler
   priceHistory    PriceHistory[]
   favorites       UserFavorite[]
   duplicateGroupId String? @map("duplicate_group_id")
@@ -83,7 +80,7 @@ model PriceHistory {
 
 model DuplicateGroup {
   id          String   @id @default(cuid())
-  listingIds  String   @default("[]") @map("listing_ids") // JSON array of listing IDs
+  listingIds  String   @default("[]") @map("listing_ids")
   primaryId   String?  @map("primary_id")
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
@@ -94,7 +91,7 @@ model ScrapeLog {
   sourceName  String    @map("source_name")
   startTime   DateTime  @default(now()) @map("start_time")
   endTime     DateTime? @map("end_time")
-  status      String    @map("status") // "running", "success", "failed"
+  status      String    @map("status")
   itemsFound  Int       @default(0) @map("items_found")
   itemsSaved  Int       @default(0) @map("items_saved")
   errorMsg    String?   @map("error_msg")
@@ -110,14 +107,12 @@ model CacheStats {
   lastMiss    DateTime? @map("last_miss")
 }
 
-// ── User (membership system) ───────────────────────────────────────────
-
 model User {
   id            String    @id @default(cuid())
   email         String    @unique
   name          String?
   passwordHash  String    @map("password_hash")
-  role          String    @default("user") // "user" | "admin"
+  role          String    @default("user")
   createdAt     DateTime  @default(now()) @map("created_at")
   updatedAt     DateTime  @updatedAt @map("updated_at")
 
@@ -135,7 +130,7 @@ model UserFavorite {
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   listing     Listing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
 
-  @@unique([userId, listingId]) // one favorite per user+listing
+  @@unique([userId, listingId])
   @@index([userId])
   @@index([listingId])
   @@map("user_favorites")

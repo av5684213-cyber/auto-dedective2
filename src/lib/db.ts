@@ -1,13 +1,5 @@
 import { PrismaClient } from '@prisma/client'
 
-// ── Prisma Singleton (production-safe) ──────────────────────────────────
-//
-// Single client per process via globalThis, used in ALL environments.
-// Prisma-recommended pattern for Next.js to avoid connection storms on
-// serverless cold starts (Vercel).
-//
-// Ref: https://www.prisma.io/docs/guides/nextjs
-
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined
 }
@@ -15,6 +7,11 @@ const globalForPrisma = globalThis as unknown as {
 function createPrismaClient(): PrismaClient {
   return new PrismaClient({
     log: ['error', 'warn'],
+    datasources: {
+      db: {
+        url: process.env.DATABASE_URL,
+      },
+    },
   })
 }
 
@@ -22,4 +19,11 @@ export const db = globalForPrisma.prisma ?? createPrismaClient()
 
 if (!globalForPrisma.prisma) {
   globalForPrisma.prisma = db
+}
+
+// Graceful shutdown — close connection on process exit
+if (process.env.NODE_ENV === 'production') {
+  process.on('beforeExit', async () => {
+    await db.$disconnect()
+  })
 }
