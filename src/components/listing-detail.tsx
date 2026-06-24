@@ -23,6 +23,7 @@ import { PriceDisplay, formatPrice } from '@/components/price-display'
 import { StarRating } from '@/components/star-rating'
 import { ShareButton } from '@/components/share-button'
 import { LoanCalculator } from '@/components/loan-calculator'
+import { DescriptionSummary } from '@/components/description-summary'
 import { useFavorites } from '@/hooks/use-favorites'
 import { SOURCE_PLATFORMS, DEAL_TAG_CONFIG } from '@/lib/constants'
 import type { ListingWithScore } from '@/lib/types'
@@ -514,6 +515,9 @@ export function ListingDetail({ listing, open, onClose, onComparableClick }: Lis
                   </div>
                 </div>
               )}
+
+              {/* İlan Özeti */}
+              <DescriptionSummary description={detail.description} listing={detail} />
 
               {/* Description */}
               {detail.description && (

@@ -15,6 +15,7 @@ import {
 import { DealBadge } from '@/components/deal-badge'
 import { formatPrice } from '@/components/price-display'
 import { LoanCalculator } from '@/components/loan-calculator'
+import { PriceTrends } from '@/components/price-trends'
 import { SOURCE_PLATFORMS, DEAL_TAG_CONFIG } from '@/lib/constants'
 
 interface StatsData {
@@ -448,6 +449,16 @@ export function StatsDashboard() {
           className="mt-2"
         >
           <LoanCalculator />
+        </motion.div>
+
+        {/* Fiyat Trend Grafikleri */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.6 }}
+          className="mt-2"
+        >
+          <PriceTrends />
         </motion.div>
       </motion.div>
     </div>

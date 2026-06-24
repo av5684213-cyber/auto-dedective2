@@ -24,6 +24,8 @@ export const metadata: Metadata = {
     shortcut: "/favicon.ico",
     apple: "/icon.png",
   },
+  manifest: "/manifest.json",
+  themeColor: "#ea580c",
   openGraph: {
     title: "Otodedektif",
     description: "Tüm İkinci El Araç İlanları Tek Bir Adreste",
