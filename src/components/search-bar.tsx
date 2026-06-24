@@ -109,12 +109,12 @@ export function SearchBar({ onSearch, onMakeSelect, onModelSelect, currentQuery 
       className="w-full"
     >
       {/* Hero Section */}
-      <div className="text-center mb-8">
+      <div className="text-center mb-6">
         <motion.h1
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.5, delay: 0.1 }}
-          className="text-4xl md:text-5xl font-extrabold tracking-tight font-display"
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.1 }}
+          className="text-2xl md:text-3xl font-bold tracking-tight"
         >
           <span className="text-orange-600">Oto</span>
           <span className="text-amber-500">dedektif</span>
@@ -122,8 +122,8 @@ export function SearchBar({ onSearch, onMakeSelect, onModelSelect, currentQuery 
         <motion.p
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          transition={{ duration: 0.5, delay: 0.2 }}
-          className="text-muted-foreground mt-2 text-sm md:text-base"
+          transition={{ duration: 0.4, delay: 0.15 }}
+          className="text-muted-foreground mt-1.5 text-xs md:text-sm"
         >
           Tüm İkinci El Araç İlanları Tek Bir Adreste
         </motion.p>

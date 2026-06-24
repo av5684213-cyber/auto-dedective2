@@ -132,7 +132,7 @@ export function StatsDashboard() {
       {/* Top Stats Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0 }}>
-          <Card className="border-orange-200 bg-gradient-to-br from-orange-50 to-white">
+          <Card className="border-orange-200 bg-gradient-to-br from-[#1A1A1A] to-[#0F0F0F]">
             <CardContent className="p-4">
               <div className="flex items-center gap-2 text-orange-600 mb-1">
                 <Car className="h-4 w-4" />

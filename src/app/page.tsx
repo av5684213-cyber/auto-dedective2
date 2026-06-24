@@ -12,6 +12,7 @@ import { ListingDetail } from '@/components/listing-detail'
 import { StatsDashboard } from '@/components/stats-dashboard'
 import { FavoritesPanel } from '@/components/favorites-panel'
 import { UserMenu } from '@/components/auth/user-menu'
+import { ThemeToggle } from '@/components/theme-toggle'
 import { useFavorites } from '@/hooks/use-favorites'
 import type { SearchFilters, SearchResult, ListingWithScore, SearchAggregations } from '@/lib/types'
 
@@ -232,7 +233,7 @@ export default function Home() {
           {/* Logo */}
           <div className="flex items-center gap-2 shrink-0">
             <Car className="h-6 w-6 text-orange-600" />
-            <span className="text-lg font-extrabold font-display">
+            <span className="text-base font-bold">
               <span className="text-orange-600">Oto</span>
               <span className="text-amber-500">dedektif</span>
             </span>
@@ -261,8 +262,9 @@ export default function Home() {
             </TabsList>
           </Tabs>
 
-          {/* User Menu */}
-          <div className="shrink-0">
+          {/* Theme Toggle + User Menu */}
+          <div className="shrink-0 flex items-center gap-2">
+            <ThemeToggle />
             <UserMenu />
           </div>
         </div>
@@ -280,7 +282,7 @@ export default function Home() {
               transition={{ duration: 0.2 }}
             >
               {/* Search Bar Section */}
-              <div className="bg-gradient-to-b from-orange-50/80 to-white border-b px-4 py-6 sm:py-8">
+              <div className="bg-gradient-to-b from-[#1A1A1A] to-[#0F0F0F] border-b border-[#2A2A2A] px-4 py-6 sm:py-8">
                 <SearchBar
                   onSearch={handleSearch}
                   onMakeSelect={handleMakeSelect}
@@ -352,7 +354,7 @@ export default function Home() {
       </main>
 
       {/* Footer */}
-      <footer className="mt-auto border-t bg-muted/30 py-4">
+      <footer className="mt-auto border-t border-[#2A2A2A] bg-[#0F0F0F] py-4">
         <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-muted-foreground">
           <div className="flex items-center gap-1.5">
             <Car className="h-3.5 w-3.5 text-orange-600" />
