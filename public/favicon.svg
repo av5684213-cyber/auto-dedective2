@@ -1,8 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <!-- Background: turuncu araba (embedded base64 PNG) -->
-  <image href="/icon-original.png" x="0" y="0" width="64" height="64" />
-  
-  <!-- Büyüteç — sağ alt köşe -->
-  <circle cx="44" cy="44" r="11" fill="rgba(234,88,12,0.25)" stroke="#ea580c" stroke-width="3" stroke-linecap="round"/>
-  <line x1="52" y1="52" x2="60" y2="60" stroke="#ea580c" stroke-width="4" stroke-linecap="round"/>
-</svg>

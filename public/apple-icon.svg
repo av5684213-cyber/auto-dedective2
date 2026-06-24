@@ -1,5 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 180">
-  <image href="/icon-original.png" x="0" y="0" width="180" height="180"/>
-  <circle cx="125" cy="125" r="32" fill="rgba(234,88,12,0.25)" stroke="#ea580c" stroke-width="8" stroke-linecap="round"/>
-  <line x1="148" y1="148" x2="170" y2="170" stroke="#ea580c" stroke-width="10" stroke-linecap="round"/>
-</svg>
