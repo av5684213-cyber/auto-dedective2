@@ -227,12 +227,12 @@ export default function Home() {
   return (
     <div className="min-h-screen flex flex-col bg-background">
       {/* Sticky Header */}
-      <header className="sticky top-0 z-40 bg-white/80 backdrop-blur-lg border-b">
+      <header className="sticky top-0 z-40 bg-[#0F0F0F]/80 backdrop-blur-lg border-b border-[#2A2A2A]">
         <div className="max-w-7xl mx-auto px-4 h-14 flex items-center justify-between gap-4">
           {/* Logo */}
           <div className="flex items-center gap-2 shrink-0">
             <Car className="h-6 w-6 text-orange-600" />
-            <span className="text-lg font-extrabold">
+            <span className="text-lg font-extrabold font-display">
               <span className="text-orange-600">Oto</span>
               <span className="text-amber-500">dedektif</span>
             </span>
