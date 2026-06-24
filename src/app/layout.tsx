@@ -20,15 +20,18 @@ export const metadata: Metadata = {
   keywords: ["ikinci el", "araç", "otomobil", "kıyasla", "fiyat", "sahibinden", "arabam", "meta-arama"],
   authors: [{ name: "Otodedektif" }],
   icons: {
-    icon: "/icon.png",
-    shortcut: "/favicon.ico",
-    apple: "/icon.png",
+    icon: [
+      { url: "/favicon.svg", type: "image/svg+xml" },
+      { url: "/icon.png", type: "image/png" },
+    ],
+    shortcut: "/favicon.svg",
+    apple: "/apple-icon.svg",
   },
   openGraph: {
     title: "Otodedektif",
     description: "Tüm İkinci El Araç İlanları Tek Bir Adreste",
     type: "website",
-    images: ["/icon.png"],
+    images: ["/og-image.svg"],
   },
 };
 
