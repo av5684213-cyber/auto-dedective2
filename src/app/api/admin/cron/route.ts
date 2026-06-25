@@ -123,7 +123,83 @@ export async function POST(request: Request) {
   // Step 4: Valuation
   try { const v = await valueAllListings(); results.valuationUpdated = v.updated; } catch {}
 
-  // Step 5: Clear cache
+  // Step 5: Check saved search alerts
+  let alertsTriggered = 0;
+  try {
+    const savedSearches = await db.savedSearch.findMany({
+      where: { isActive: true },
+      include: { user: true },
+    });
+
+    for (const search of savedSearches) {
+      try {
+        const filters = JSON.parse(search.filters);
+        const where: Record<string, unknown> = {
+          isActive: true,
+          isDeleted: false,
+          firstSeenAt: { gt: search.lastCheckedAt },
+        };
+
+        if (filters.make) where.make = { equals: filters.make };
+        if (filters.model) where.model = { equals: filters.model };
+        if (filters.yearMin || filters.yearMax) {
+          const y: Record<string, number> = {};
+          if (filters.yearMin) y.gte = filters.yearMin;
+          if (filters.yearMax) y.lte = filters.yearMax;
+          where.year = y;
+        }
+        if (filters.priceMin || filters.priceMax) {
+          const p: Record<string, number> = {};
+          if (filters.priceMin) p.gte = filters.priceMin;
+          if (filters.priceMax) p.lte = filters.priceMax;
+          where.price = p;
+        }
+        if (filters.fuelType) where.fuelType = { equals: filters.fuelType };
+        if (filters.transmission) where.transmission = { equals: filters.transmission };
+        if (filters.city) where.city = { equals: filters.city };
+
+        const newMatches = await db.listing.findMany({
+          where: where as any,
+          select: { id: true, make: true, model: true, year: true, price: true, imageUrl: true, sourceUrl: true },
+          take: 20,
+        });
+
+        if (newMatches.length > 0) {
+          // Yeni eşleşmeler var — bildirim gönder
+          // (Şimdilik sadece log + DB güncelle, email entegrasyonu sonra)
+          console.log(`[cron] Alert "${search.name}" for ${search.user.email}: ${newMatches.length} new matches`);
+
+          // notifiedListingIds güncelle
+          const alreadyNotified: string[] = JSON.parse(search.notifiedListingIds || '[]');
+          const newIds = newMatches.map(m => m.id).filter(id => !alreadyNotified.includes(id));
+
+          if (newIds.length > 0) {
+            await db.savedSearch.update({
+              where: { id: search.id },
+              data: {
+                lastCheckedAt: new Date(),
+                notifiedListingIds: JSON.stringify([...alreadyNotified, ...newIds].slice(-100)),
+              },
+            });
+            alertsTriggered++;
+          }
+        } else {
+          // Eşleşme yok, sadece lastCheckedAt güncelle
+          await db.savedSearch.update({
+            where: { id: search.id },
+            data: { lastCheckedAt: new Date() },
+          });
+        }
+      } catch (e) {
+        console.error(`[cron] Alert check failed for ${search.id}:`, e);
+      }
+    }
+  } catch (e) {
+    console.error('[cron] Alert check failed:', e);
+  }
+  (results as any).alertsTriggered = alertsTriggered;
+
+  // Step 6: Clear cache
   try { await cache.clear(); } catch {}
 
   try { results.totalActive = await db.listing.count({ where: { isActive: true } }); } catch {}

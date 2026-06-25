@@ -125,6 +125,7 @@ model User {
   updatedAt     DateTime  @updatedAt @map("updated_at")
 
   favorites     UserFavorite[]
+  savedSearches SavedSearch[]
 
   @@map("users")
 }
@@ -167,4 +168,33 @@ model VehicleFuelSpec {
   @@index([make, model])
   @@index([make, model, fuelType])
   @@map("vehicle_fuel_specs")
+}
+
+// ── Saved Search Alerts ──────────────────────────────────────────────────
+//
+// Kullanıcı filtreleri kaydeder. Cron her gece yeni ilanları kontrol eder,
+// bu kriterlere uyan yeni ilan varsa email + browser notification gönderir.
+
+model SavedSearch {
+  id            String   @id @default(cuid())
+  userId        String   @map("user_id")
+  name          String   // kullanıcı verdiği isim, örn "BMW 320i İstanbul 2020+"
+  // Filtre kriterleri (JSON olarak saklanır)
+  filters       String   @map("filters") // JSON: {make, model, yearMin, yearMax, priceMin, priceMax, fuelType, transmission, city, ...}
+  // Bildirim ayarları
+  notifyEmail   Boolean  @default(true) @map("notify_email")
+  notifyPush    Boolean  @default(true) @map("notify_push")
+  // Son kontrol zamanı (bu tarihten sonra eklenen ilanları ara)
+  lastCheckedAt DateTime @default(now()) @map("last_checked_at")
+  // Eşleşen ilan ID'leri (bildirim gönderilenler — tekrar göndermemek için)
+  notifiedListingIds String @default("[]") @map("notified_listing_ids") // JSON array
+  isActive      Boolean  @default(true) @map("is_active")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([isActive])
+  @@map("saved_searches")
 }

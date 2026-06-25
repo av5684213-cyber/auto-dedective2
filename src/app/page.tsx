@@ -12,6 +12,8 @@ import { ListingGrid } from '@/components/listing-grid'
 import { StatsDashboard } from '@/components/stats-dashboard'
 import { UserMenu } from '@/components/auth/user-menu'
 import { ThemeToggle } from '@/components/theme-toggle'
+import { AlertManager } from '@/components/alerts/alert-manager'
+import { Bell } from 'lucide-react'
 import type { SearchFilters, SearchResult, ListingWithScore, SearchAggregations } from '@/lib/types'
 
 const DEFAULT_FILTERS: SearchFilters = {
@@ -73,6 +75,7 @@ export default function Home() {
   const [loading, setLoading] = useState(true)
   const [aggregations, setAggregations] = useState<SearchAggregations | null>(null)
   const [filterDrawerOpen, setFilterDrawerOpen] = useState(false)
+  const [alertOpen, setAlertOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
 
   // Initialize from URL
@@ -286,17 +289,28 @@ export default function Home() {
                 />
 
                 <div className="flex-1 min-w-0 p-4">
-                  {/* Mobile filter button + Results header */}
-                  <div className="flex items-center justify-between mb-4 lg:hidden">
-                    <FilterButton
-                      onClick={() => setFilterDrawerOpen(true)}
-                      activeCount={activeFilterCount}
-                    />
-                    {results && (
-                      <span className="text-sm text-muted-foreground">
-                        {results.total.toLocaleString('tr-TR')} ilan
-                      </span>
-                    )}
+                  {/* Results header + Alarm button */}
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      <FilterButton
+                        onClick={() => setFilterDrawerOpen(true)}
+                        activeCount={activeFilterCount}
+                      />
+                      {results && (
+                        <span className="text-sm text-muted-foreground hidden lg:inline">
+                          {results.total.toLocaleString('tr-TR')} ilan
+                        </span>
+                      )}
+                    </div>
+                    <Button
+                      onClick={() => setAlertOpen(true)}
+                      variant="outline"
+                      size="sm"
+                      className="gap-1.5 border-[#2A2A2A] hover:bg-[#1A1A1A] hover:text-orange-500"
+                    >
+                      <Bell className="h-3.5 w-3.5" />
+                      <span className="hidden sm:inline">Alarm Kur</span>
+                    </Button>
                   </div>
 
                   <ListingGrid
@@ -338,6 +352,13 @@ export default function Home() {
           </p>
         </div>
       </footer>
+
+      {/* Alert Manager Modal */}
+      <AlertManager
+        open={alertOpen}
+        onClose={() => setAlertOpen(false)}
+        currentFilters={filters}
+      />
     </div>
   )
 }
