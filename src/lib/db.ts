@@ -21,7 +21,7 @@ if (!globalForPrisma.prisma) {
   globalForPrisma.prisma = db
 }
 
-// Graceful shutdown — close connection on process exit
+// Vercel serverless'ta bağlantıyı kapat — pool dolmasın
 if (process.env.NODE_ENV === 'production') {
   process.on('beforeExit', async () => {
     await db.$disconnect()
