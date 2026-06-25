@@ -96,7 +96,7 @@ export function ListingCard({ listing, onClick, index = 0 }: ListingCardProps) {
       className="cursor-pointer"
       onClick={() => onClick(listing)}
     >
-      <Card className="overflow-hidden border border-[#2A2A2A] hover:border-[#F15A24]/50 hover:shadow-xl hover:shadow-[#F15A24]/5 transition-all duration-200 h-full flex flex-col relative rounded-xl bg-[#1A1A1A]">
+      <Card className="overflow-hidden border border-border hover:border-[#F15A24]/50 hover:shadow-xl hover:shadow-[#F15A24]/5 transition-all duration-200 h-full flex flex-col relative rounded-xl bg-card">
 
         {/* Image */}
         <div className={`relative aspect-[16/10] ${hasImage ? '' : `bg-gradient-to-br ${gradient}`} flex items-center justify-center overflow-hidden`}>
@@ -164,15 +164,15 @@ export function ListingCard({ listing, onClick, index = 0 }: ListingCardProps) {
         <CardContent className="p-4 flex flex-col flex-1 gap-1.5">
           {/* Title */}
           <div>
-            <h3 className="font-bold text-sm line-clamp-1 text-white">
+            <h3 className="font-bold text-sm line-clamp-1 text-foreground">
               {listing.make} {listing.model}
             </h3>
-            <p className="text-xs text-[#A0A0A0]">{listing.year}{listing.trim ? ` • ${listing.trim}` : ''}</p>
+            <p className="text-xs text-muted-foreground">{listing.year}{listing.trim ? ` • ${listing.trim}` : ''}</p>
           </div>
 
           {/* Price */}
           <div className="flex items-baseline gap-2">
-            <span className="text-xl font-bold font-mono-data text-white">
+            <span className="text-xl font-bold font-mono-data text-foreground">
               {turkishFormatter.format(listing.price)} TL
             </span>
           </div>
@@ -192,7 +192,7 @@ export function ListingCard({ listing, onClick, index = 0 }: ListingCardProps) {
           />
 
           {/* Specs */}
-          <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-[#A0A0A0] mt-auto pt-1.5">
+          <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground mt-auto pt-1.5">
             {listing.mileageKm != null && (
               <span className="flex items-center gap-1">
                 <Gauge className="h-3 w-3" />

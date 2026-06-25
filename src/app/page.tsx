@@ -222,7 +222,7 @@ export default function Home() {
   return (
     <div className="min-h-screen flex flex-col bg-background">
       {/* Sticky Header */}
-      <header className="sticky top-0 z-40 bg-[#0F0F0F]/80 backdrop-blur-lg border-b border-[#2A2A2A]">
+      <header className="sticky top-0 z-40 bg-background/80 backdrop-blur-lg border-b border-border">
         <div className="max-w-7xl mx-auto px-4 h-14 flex items-center justify-between gap-4">
           {/* Logo */}
           <div className="flex items-center gap-2 shrink-0">
@@ -276,7 +276,7 @@ export default function Home() {
               transition={{ duration: 0.2 }}
             >
               {/* Search Bar Section */}
-              <div className="bg-gradient-to-b from-[#1A1A1A] to-[#0F0F0F] border-b border-[#2A2A2A] px-4 py-6 sm:py-8">
+              <div className="bg-gradient-to-b from-card to-background border-b border-border px-4 py-6 sm:py-8">
                 <SearchBar
                   onSearch={handleSearch}
                   onMakeSelect={handleMakeSelect}
@@ -348,7 +348,7 @@ export default function Home() {
       </main>
 
       {/* Footer */}
-      <footer className="mt-auto border-t border-[#2A2A2A] bg-[#0F0F0F] py-4">
+      <footer className="mt-auto border-t border-border bg-background py-4">
         <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-muted-foreground">
           <div className="flex items-center gap-1.5">
             <Car className="h-3.5 w-3.5 text-orange-600" />

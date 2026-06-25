@@ -136,7 +136,7 @@ function LoginForm() {
 
 export default function LoginPage() {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#1A1A1A] to-[#0F0F0F] p-4">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-card to-background p-4">
       <Suspense fallback={<div className="text-muted-foreground">Yükleniyor...</div>}>
         <LoginForm />
       </Suspense>

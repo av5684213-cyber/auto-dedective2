@@ -61,7 +61,7 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#1A1A1A] to-[#0F0F0F] p-4">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-card to-background p-4">
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}

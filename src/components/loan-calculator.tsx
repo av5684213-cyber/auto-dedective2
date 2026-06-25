@@ -68,7 +68,7 @@ export function LoanCalculator({ price, compact = false }: LoanCalculatorProps) 
   const quickTerms = [12, 24, 36, 48, 60]
 
   return (
-    <Card className={compact ? 'border-[#2A2A2A]' : 'shadow-lg'}>
+    <Card className={compact ? 'border-border' : 'shadow-lg'}>
       <CardHeader className={compact ? 'pb-3' : ''}>
         <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
           <Calculator className="h-5 w-5 text-orange-600" />
@@ -152,7 +152,7 @@ export function LoanCalculator({ price, compact = false }: LoanCalculatorProps) 
         {/* Sonuçlar */}
         <div className="space-y-2.5">
           {/* Aylık Taksit — büyük vurgu */}
-          <div className="bg-[#1A1A1A] rounded-lg p-4 text-center">
+          <div className="bg-muted rounded-lg p-4 text-center">
             <p className="text-xs text-muted-foreground mb-1">Aylık Taksit</p>
             <p className="text-2xl sm:text-3xl font-extrabold text-orange-700">
               {formatPrice(results.monthlyPayment)}

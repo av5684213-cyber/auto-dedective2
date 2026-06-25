@@ -33,7 +33,7 @@ import { Separator } from '@/components/ui/separator'
 import {
   Fuel, Gauge, MapPin, Settings2, Car, Calendar, Route, Palette, Building2,
   User, ExternalLink, TrendingDown, Shield, Wrench, Receipt, Droplets,
-  Clock, Heart, Share2, ChevronRight, CheckCircle2, Info,
+  Clock, Heart, Share2, ChevronRight, CheckCircle2, Info, Maximize2, X, ChevronLeft,
 } from 'lucide-react'
 import { DealBadge } from '@/components/deal-badge'
 import { formatPrice } from '@/components/price-display'
@@ -58,6 +58,7 @@ interface DetailState {
   currentId: string | null
   imgError: boolean
   activeImageIdx: number
+  lightboxOpen: boolean
 }
 
 function detailReducer(state: DetailState, action: { type: string; payload?: unknown }): DetailState {
@@ -72,6 +73,14 @@ function detailReducer(state: DetailState, action: { type: string; payload?: unk
       return { ...state, imgError: true }
     case 'SET_IMAGE_IDX':
       return { ...state, activeImageIdx: action.payload as number }
+    case 'OPEN_LIGHTBOX':
+      return { ...state, lightboxOpen: true }
+    case 'CLOSE_LIGHTBOX':
+      return { ...state, lightboxOpen: false }
+    case 'LIGHTBOX_NEXT':
+      return { ...state, activeImageIdx: state.activeImageIdx + 1 }
+    case 'LIGHTBOX_PREV':
+      return { ...state, activeImageIdx: state.activeImageIdx - 1 }
     default:
       return state
   }
@@ -144,7 +153,7 @@ function FavoriteToggleButton({ listing, compact }: { listing: ListingWithScore;
   return (
     <button
       onClick={() => toggleFavorite(listing.id)}
-      className={`flex items-center justify-center gap-2 rounded-lg font-medium transition-all ${
+      className={`flex items-center justify-center gap-2 rounded-lg font-medium transition-all cursor-pointer ${
         compact ? 'w-10 h-10' : 'w-full py-2.5'
       } ${
         fav
@@ -172,6 +181,7 @@ export function ListingDetailContent({ initialListing, listingId }: ListingDetai
     currentId: null,
     imgError: false,
     activeImageIdx: 0,
+    lightboxOpen: false,
   })
   const [activeTab, setActiveTab] = useState<'specs' | 'evaluation' | 'history'>('specs')
 
@@ -299,16 +309,27 @@ export function ListingDetailContent({ initialListing, listingId }: ListingDetai
 
             {/* Galeri */}
             <div className="space-y-3">
-              {/* Büyük görsel */}
-              <div className={`relative aspect-[16/10] sm:aspect-[16/9] rounded-xl overflow-hidden bg-gradient-to-br from-slate-200 to-slate-300 dark:from-slate-800 dark:to-slate-900 ${detailHasImage ? '' : 'flex items-center justify-center'}`}>
+              {/* Büyük görsel — tıklanınca lightbox açılır */}
+              <div
+                className={`relative aspect-[16/10] sm:aspect-[16/9] rounded-xl overflow-hidden bg-gradient-to-br from-slate-200 to-slate-300 dark:from-slate-800 dark:to-slate-900 group ${detailHasImage ? 'cursor-zoom-in' : 'flex items-center justify-center'}`}
+                onClick={() => detailHasImage && dispatch({ type: 'OPEN_LIGHTBOX' })}
+              >
                 {detailHasImage ? (
-                  <img
-                    src={allImages[state.activeImageIdx] || detail.imageUrl!}
-                    alt={`${detail.make} ${detail.model}`}
-                    className="w-full h-full object-cover"
-                    onError={() => dispatch({ type: 'IMG_ERROR' })}
-                    referrerPolicy="no-referrer"
-                  />
+                  <>
+                    <img
+                      src={allImages[state.activeImageIdx] || detail.imageUrl!}
+                      alt={`${detail.make} ${detail.model}`}
+                      className="w-full h-full object-cover"
+                      onError={() => dispatch({ type: 'IMG_ERROR' })}
+                      referrerPolicy="no-referrer"
+                    />
+                    {/* Zoom overlay — hover'da görünür */}
+                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center pointer-events-none">
+                      <div className="opacity-0 group-hover:opacity-100 transition-opacity bg-black/60 text-white rounded-full p-3 backdrop-blur-sm">
+                        <Maximize2 className="h-5 w-5" />
+                      </div>
+                    </div>
+                  </>
                 ) : (
                   <div className="flex flex-col items-center justify-center text-slate-400 dark:text-slate-600">
                     <Car className="h-20 w-20 mb-2" />
@@ -317,7 +338,7 @@ export function ListingDetailContent({ initialListing, listingId }: ListingDetai
                 )}
 
                 {/* Source badge (desktop'ta burada, mobile'da yukarıda) */}
-                <div className="hidden lg:flex absolute top-3 left-3 gap-2">
+                <div className="hidden lg:flex absolute top-3 left-3 gap-2 pointer-events-none">
                   <Badge
                     className="border-0 font-medium text-xs backdrop-blur-sm"
                     style={{ backgroundColor: source.color, color: '#ffffff' }}
@@ -328,14 +349,14 @@ export function ListingDetailContent({ initialListing, listingId }: ListingDetai
 
                 {/* Deal badge */}
                 {detail.dealTag && (
-                  <div className="absolute top-3 right-3">
+                  <div className="absolute top-3 right-3 pointer-events-none">
                     <DealBadge tag={detail.dealTag} />
                   </div>
                 )}
 
                 {/* Image counter */}
                 {allImages.length > 1 && (
-                  <div className="absolute bottom-3 right-3 px-2 py-1 rounded-md bg-black/60 text-white text-xs font-medium backdrop-blur-sm">
+                  <div className="absolute bottom-3 right-3 px-2 py-1 rounded-md bg-black/60 text-white text-xs font-medium backdrop-blur-sm pointer-events-none">
                     {state.activeImageIdx + 1} / {allImages.length}
                   </div>
                 )}
@@ -366,7 +387,7 @@ export function ListingDetailContent({ initialListing, listingId }: ListingDetai
                   isGoodDeal={isGoodDeal}
                   isBadDeal={isBadDeal}
                   listingId={listingId}
-                  onRedirect={() => router.push(`/yonlendir/${listingId}`)}
+                  onRedirect={() => window.open(`/yonlendir/${listingId}`, '_blank', 'noopener,noreferrer')}
                 />
               </div>
             </div>
@@ -676,7 +697,7 @@ export function ListingDetailContent({ initialListing, listingId }: ListingDetai
                   isGoodDeal={isGoodDeal}
                   isBadDeal={isBadDeal}
                   listingId={listingId}
-                  onRedirect={() => router.push(`/yonlendir/${listingId}`)}
+                  onRedirect={() => window.open(`/yonlendir/${listingId}`, '_blank', 'noopener,noreferrer')}
                 />
               </div>
 
@@ -712,6 +733,19 @@ export function ListingDetailContent({ initialListing, listingId }: ListingDetai
 
         </div>
       </div>
+
+      {/* Lightbox — resme tıklanınca tam ekran galeri */}
+      {state.lightboxOpen && detailHasImage && (
+        <LightboxModal
+          images={allImages}
+          currentIdx={state.activeImageIdx}
+          alt={`${detail.make} ${detail.model}`}
+          onClose={() => dispatch({ type: 'CLOSE_LIGHTBOX' })}
+          onNext={() => dispatch({ type: 'LIGHTBOX_NEXT' })}
+          onPrev={() => dispatch({ type: 'LIGHTBOX_PREV' })}
+          onIdxChange={(idx) => dispatch({ type: 'SET_IMAGE_IDX', payload: idx })}
+        />
+      )}
     </div>
   )
 }
@@ -828,12 +862,130 @@ function PriceBox({
       <div className="grid grid-cols-2 gap-2">
         <FavoriteToggleButton listing={detail} />
         <ShareButton
-          url={typeof window !== 'undefined' ? window.location.href : detail.sourceUrl}
+          url={typeof window !== 'undefined' ? window.location.href : `/ilan/${listingId}`}
           title={`${detail.make} ${detail.model} ${detail.year} - ${formatPrice(detail.price)}`}
           variant="button"
           size="md"
         />
       </div>
+    </div>
+  )
+}
+
+// ── Lightbox modal — tam ekran galeri ──────────────────────────────────
+// Klavye desteği: Esc=kapat, ←/→=önceki/sonraki
+function LightboxModal({
+  images,
+  currentIdx,
+  alt,
+  onClose,
+  onNext,
+  onPrev,
+  onIdxChange,
+}: {
+  images: string[]
+  currentIdx: number
+  alt: string
+  onClose: () => void
+  onNext: () => void
+  onPrev: () => void
+  onIdxChange: (idx: number) => void
+}) {
+  // Bound check — son görselde "next" başa döner, ilk görselde "prev" sona gider
+  const safeIdx = ((currentIdx % images.length) + images.length) % images.length
+  const hasMultiple = images.length > 1
+
+  // Klavye desteği
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
+      else if (e.key === 'ArrowRight' && hasMultiple) onNext()
+      else if (e.key === 'ArrowLeft' && hasMultiple) onPrev()
+    }
+    window.addEventListener('keydown', handleKey)
+    // Lightbox açıkken arka plan scroll'unu kapat
+    document.body.style.overflow = 'hidden'
+    return () => {
+      window.removeEventListener('keydown', handleKey)
+      document.body.style.overflow = ''
+    }
+  }, [onClose, onNext, onPrev, hasMultiple])
+
+  return (
+    <div
+      className="fixed inset-0 z-[100] bg-black/95 flex items-center justify-center"
+      onClick={onClose}
+    >
+      {/* Kapat butonu */}
+      <button
+        onClick={onClose}
+        className="absolute top-4 right-4 z-10 p-2 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors"
+        aria-label="Kapat"
+      >
+        <X className="h-6 w-6" />
+      </button>
+
+      {/* Görsel sayacı */}
+      {hasMultiple && (
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10 px-3 py-1 rounded-full bg-white/10 text-white text-sm font-medium backdrop-blur-sm">
+          {safeIdx + 1} / {images.length}
+        </div>
+      )}
+
+      {/* Önceki butonu */}
+      {hasMultiple && (
+        <button
+          onClick={(e) => { e.stopPropagation(); onPrev() }}
+          className="absolute left-4 top-1/2 -translate-y-1/2 z-10 p-3 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors"
+          aria-label="Önceki görsel"
+        >
+          <ChevronLeft className="h-7 w-7" />
+        </button>
+      )}
+
+      {/* Büyük görsel — tıklama propagation'ı durdur ki kapanmasın */}
+      <div
+        className="max-w-[95vw] max-h-[95vh] flex items-center justify-center"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <img
+          src={images[safeIdx]}
+          alt={alt}
+          className="max-w-full max-h-[90vh] object-contain rounded-lg"
+          referrerPolicy="no-referrer"
+        />
+      </div>
+
+      {/* Sonraki butonu */}
+      {hasMultiple && (
+        <button
+          onClick={(e) => { e.stopPropagation(); onNext() }}
+          className="absolute right-4 top-1/2 -translate-y-1/2 z-10 p-3 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors"
+          aria-label="Sonraki görsel"
+        >
+          <ChevronRight className="h-7 w-7" />
+        </button>
+      )}
+
+      {/* Thumbnail strip (altta) */}
+      {hasMultiple && (
+        <div
+          className="absolute bottom-4 left-0 right-0 flex justify-center gap-2 px-4 overflow-x-auto"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {images.map((img, idx) => (
+            <button
+              key={idx}
+              onClick={() => onIdxChange(idx)}
+              className={`flex-shrink-0 w-16 h-12 rounded-md overflow-hidden border-2 transition-all ${
+                idx === safeIdx ? 'border-orange-500 opacity-100' : 'border-transparent opacity-50 hover:opacity-80'
+              }`}
+            >
+              <img src={img} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
