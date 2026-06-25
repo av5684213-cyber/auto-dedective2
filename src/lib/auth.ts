@@ -1,16 +1,10 @@
-// Otodedektif - NextAuth Configuration
-//
-// Credentials-based auth (email + password).
-// JWT session (serverless-friendly, no DB session needed).
-// bcryptjs for password hashing.
-// SQLite DB (Prisma) — kullanıcılar ve favoriler DB'de saklanır.
-
 import type { NextAuthOptions } from 'next-auth'
 import CredentialsProvider from 'next-auth/providers/credentials'
 import bcrypt from 'bcryptjs'
 import { db } from '@/lib/db'
 
-export const NEXTAUTH_SECRET = process.env.NEXTAUTH_SECRET || 'otodedektif-dev-secret-stable-do-not-change-2026'
+// Use env var or a fixed fallback (must be consistent across serverless invocations)
+const SECRET = process.env.NEXTAUTH_SECRET || 'otodedektif-secret-key-2026-fixed-do-not-change'
 
 export const authOptions: NextAuthOptions = {
   providers: [
@@ -22,20 +16,26 @@ export const authOptions: NextAuthOptions = {
       },
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) {
-          return null
+          throw new Error('Email ve şifre gerekli')
         }
 
-        const user = await db.user.findUnique({
-          where: { email: credentials.email.toLowerCase().trim() },
-        })
+        let user: any = null
+        try {
+          user = await db.user.findUnique({
+            where: { email: credentials.email.toLowerCase().trim() },
+          })
+        } catch (err) {
+          console.error('[auth] DB error during login:', err)
+          throw new Error('Giriş yapılamadı, tekrar deneyin')
+        }
 
         if (!user) {
-          return null
+          throw new Error('Email veya şifre hatalı')
         }
 
         const isValid = await bcrypt.compare(credentials.password, user.passwordHash)
         if (!isValid) {
-          return null
+          throw new Error('Email veya şifre hatalı')
         }
 
         return {
@@ -54,10 +54,30 @@ export const authOptions: NextAuthOptions = {
   },
 
   jwt: {
-    secret: NEXTAUTH_SECRET,
+    secret: SECRET,
+  },
+
+  callbacks: {
+    async jwt({ token, user }) {
+      if (user) {
+        token.id = (user as any).id
+        token.role = (user as any).role
+      }
+      return token
+    },
+    async session({ session, token }) {
+      if (session.user) {
+        (session.user as any).id = token.id
+        (session.user as any).role = token.role
+      }
+      return session
+    },
   },
 
   pages: {
     signIn: '/auth/login',
   },
+
+  // Suppress the "Server error" page in production
+  debug: false,
 }

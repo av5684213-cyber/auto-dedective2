@@ -1,8 +1,6 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 
-// Debug endpoint — DB connection details + live count.
-// Auth-protected.
 export async function GET(request: Request) {
   const auth = request.headers.get("authorization") || "";
   const expected = process.env.ADMIN_TOKEN || process.env.CRON_SECRET;
@@ -28,6 +26,9 @@ export async function GET(request: Request) {
       directUrl: maskUrl(directUrl),
       hasAdminToken: !!process.env.ADMIN_TOKEN,
       hasCronSecret: !!process.env.CRON_SECRET,
+      hasNextAuthSecret: !!process.env.NEXTAUTH_SECRET,
+      hasNextAuthUrl: !!process.env.NEXTAUTH_URL,
+      nodeEnv: process.env.NODE_ENV,
     },
     db: { liveCount, error: dbError },
   });
