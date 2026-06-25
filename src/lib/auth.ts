@@ -4,7 +4,7 @@ import bcrypt from 'bcryptjs'
 import { db } from '@/lib/db'
 
 // Use env var or a fixed fallback (must be consistent across serverless invocations)
-const SECRET = process.env.NEXTAUTH_SECRET || 'otodedektif-secret-key-2026-fixed-do-not-change'
+const SECRET = process.env.NEXTAUTH_SECRET || 'otodedektif-secret-key-2026-fixed-9f8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c'
 
 export const authOptions: NextAuthOptions = {
   providers: [
