@@ -3,7 +3,6 @@ import CredentialsProvider from 'next-auth/providers/credentials'
 import bcrypt from 'bcryptjs'
 import { db } from '@/lib/db'
 
-// Use env var or a fixed fallback (must be consistent across serverless invocations)
 const SECRET = process.env.NEXTAUTH_SECRET || 'otodedektif-secret-key-2026-fixed-9f8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c'
 
 export const authOptions: NextAuthOptions = {
@@ -16,7 +15,7 @@ export const authOptions: NextAuthOptions = {
       },
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) {
-          throw new Error('Email ve şifre gerekli')
+          return null
         }
 
         let user: any = null
@@ -25,18 +24,14 @@ export const authOptions: NextAuthOptions = {
             where: { email: credentials.email.toLowerCase().trim() },
           })
         } catch (err) {
-          console.error('[auth] DB error during login:', err)
-          throw new Error('Giriş yapılamadı, tekrar deneyin')
+          console.error('[auth] DB error:', err)
+          return null
         }
 
-        if (!user) {
-          throw new Error('Email veya şifre hatalı')
-        }
+        if (!user) return null
 
         const isValid = await bcrypt.compare(credentials.password, user.passwordHash)
-        if (!isValid) {
-          throw new Error('Email veya şifre hatalı')
-        }
+        if (!isValid) return null
 
         return {
           id: user.id,
@@ -50,11 +45,50 @@ export const authOptions: NextAuthOptions = {
 
   session: {
     strategy: 'jwt',
-    maxAge: 30 * 24 * 60 * 60, // 30 days
+    maxAge: 30 * 24 * 60 * 60,
   },
 
   jwt: {
     secret: SECRET,
+  },
+
+  // Vercel'de cookie'lerin doğru set edilmesi için
+  cookies: {
+    sessionToken: {
+      name: `next-auth.session-token`,
+      options: {
+        httpOnly: true,
+        sameSite: 'lax',
+        path: '/',
+        secure: true,
+      },
+    },
+    callbackUrl: {
+      name: `next-auth.callback-url`,
+      options: {
+        sameSite: 'lax',
+        path: '/',
+        secure: true,
+      },
+    },
+    csrfToken: {
+      name: `next-auth.csrf-token`,
+      options: {
+        httpOnly: true,
+        sameSite: 'lax',
+        path: '/',
+        secure: true,
+      },
+    },
+    pkceCodeVerifier: {
+      name: `next-auth.pkce.code-verifier`,
+      options: {
+        httpOnly: true,
+        sameSite: 'lax',
+        path: '/',
+        secure: true,
+      },
+    },
   },
 
   callbacks: {
@@ -77,7 +111,4 @@ export const authOptions: NextAuthOptions = {
   pages: {
     signIn: '/auth/login',
   },
-
-  // Suppress the "Server error" page in production
-  debug: false,
 }

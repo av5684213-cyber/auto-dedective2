@@ -26,10 +26,6 @@ function LoginForm() {
     setError(null)
 
     try {
-      // redirect: true → NextAuth callback URL'e yönlendirir, session cookie set edilir
-      // Hata durumunda NextAuth ?error=credentials girer ama bizim authorize null döndüğü için
-      // callback URL'e gider. Bu yüzden önce manuel kontrol yapıp doğru credentialar ile
-      // redirect: true çağırıyoruz.
       const result = await signIn('credentials', {
         email,
         password,
@@ -39,17 +35,18 @@ function LoginForm() {
       if (result?.error) {
         setError('Email veya şifre hatalı')
         setLoading(false)
-      } else if (result?.ok) {
-        // Başarılı — callback URL'e yönlendir
-        // callbackUrl absolute URL olabilir (localhost'a yönlendirmeyi önlemek için
-        // sadece path kısmını kullan)
+      } else if (result?.ok && !result.error) {
+        // Başarılı — sayfayı tam yenile (session cookie set olur)
         const safeUrl = callbackUrl.startsWith('http')
           ? new URL(callbackUrl).pathname
           : callbackUrl
         window.location.href = safeUrl || '/'
+      } else {
+        // result null veya undefined — yine de ana sayfaya git
+        window.location.href = '/'
       }
     } catch (err) {
-      setError('Giriş yapılamadı, tekrar deneyin')
+      setError('Giriş yapılamadı')
       setLoading(false)
     }
   }
