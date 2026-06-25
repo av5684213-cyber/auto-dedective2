@@ -203,19 +203,19 @@ export default function Home() {
 
   const activeFilterCount = useMemo(() => {
     let count = 0
-    if (filters.make) count++
-    if (filters.model) count++
+    if (filters.make && filters.make.trim()) count++
+    if (filters.model && filters.model.trim()) count++
     if (filters.yearMin) count++
     if (filters.yearMax) count++
     if (filters.priceMin) count++
     if (filters.priceMax) count++
     if (filters.mileageMax) count++
-    if (filters.fuelType) count++
-    if (filters.transmission) count++
-    if (filters.bodyType) count++
-    if (filters.city) count++
-    if (filters.sellerType) count++
-    if (filters.dealTag) count++
+    if (filters.fuelType && filters.fuelType.trim()) count++
+    if (filters.transmission && filters.transmission.trim()) count++
+    if (filters.bodyType && filters.bodyType.trim()) count++
+    if (filters.city && filters.city.trim()) count++
+    if (filters.sellerType && filters.sellerType.trim()) count++
+    if (filters.dealTag && filters.dealTag.trim()) count++
     if (filters.sortBy && filters.sortBy !== 'deal_score_desc') count++
     return count
   }, [filters])
