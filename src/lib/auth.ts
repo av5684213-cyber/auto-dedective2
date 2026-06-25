@@ -14,7 +14,10 @@ export const authOptions: NextAuthOptions = {
         password: { label: 'Şifre', type: 'password' },
       },
       async authorize(credentials) {
+        console.log('[auth] authorize called, email:', credentials?.email)
+        
         if (!credentials?.email || !credentials?.password) {
+          console.log('[auth] Missing credentials')
           return null
         }
 
@@ -23,6 +26,7 @@ export const authOptions: NextAuthOptions = {
           user = await db.user.findUnique({
             where: { email: credentials.email.toLowerCase().trim() },
           })
+          console.log('[auth] User found:', user ? user.email : 'not found')
         } catch (err) {
           console.error('[auth] DB error:', err)
           return null
@@ -30,8 +34,14 @@ export const authOptions: NextAuthOptions = {
 
         if (!user) return null
 
-        const isValid = await bcrypt.compare(credentials.password, user.passwordHash)
-        if (!isValid) return null
+        try {
+          const isValid = await bcrypt.compare(credentials.password, user.passwordHash)
+          console.log('[auth] Password valid:', isValid)
+          if (!isValid) return null
+        } catch (err) {
+          console.error('[auth] bcrypt error:', err)
+          return null
+        }
 
         return {
           id: user.id,
@@ -43,72 +53,38 @@ export const authOptions: NextAuthOptions = {
     }),
   ],
 
-  session: {
-    strategy: 'jwt',
-    maxAge: 30 * 24 * 60 * 60,
-  },
+  session: { strategy: 'jwt', maxAge: 30 * 24 * 60 * 60 },
+  jwt: { secret: SECRET },
 
-  jwt: {
-    secret: SECRET,
-  },
-
-  // Vercel'de cookie'lerin doğru set edilmesi için
   cookies: {
     sessionToken: {
       name: `next-auth.session-token`,
-      options: {
-        httpOnly: true,
-        sameSite: 'lax',
-        path: '/',
-        secure: true,
-      },
+      options: { httpOnly: true, sameSite: 'lax', path: '/', secure: true },
     },
     callbackUrl: {
       name: `next-auth.callback-url`,
-      options: {
-        sameSite: 'lax',
-        path: '/',
-        secure: true,
-      },
+      options: { sameSite: 'lax', path: '/', secure: true },
     },
     csrfToken: {
       name: `next-auth.csrf-token`,
-      options: {
-        httpOnly: true,
-        sameSite: 'lax',
-        path: '/',
-        secure: true,
-      },
+      options: { httpOnly: true, sameSite: 'lax', path: '/', secure: true },
     },
     pkceCodeVerifier: {
       name: `next-auth.pkce.code-verifier`,
-      options: {
-        httpOnly: true,
-        sameSite: 'lax',
-        path: '/',
-        secure: true,
-      },
+      options: { httpOnly: true, sameSite: 'lax', path: '/', secure: true },
     },
   },
 
   callbacks: {
     async jwt({ token, user }) {
-      if (user) {
-        token.id = (user as any).id
-        token.role = (user as any).role
-      }
+      if (user) { token.id = (user as any).id; token.role = (user as any).role }
       return token
     },
     async session({ session, token }) {
-      if (session.user) {
-        (session.user as any).id = token.id
-        (session.user as any).role = token.role
-      }
+      if (session.user) { (session.user as any).id = token.id; (session.user as any).role = token.role }
       return session
     },
   },
 
-  pages: {
-    signIn: '/auth/login',
-  },
+  pages: { signIn: '/auth/login' },
 }
