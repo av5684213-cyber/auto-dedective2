@@ -3,7 +3,7 @@
 import { Suspense } from 'react'
 import { useState } from 'react'
 import { signIn } from 'next-auth/react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useSearchParams } from 'next/navigation'
 import { motion } from 'framer-motion'
 import { Car, Mail, Lock, ArrowRight, AlertCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -12,7 +12,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import Link from 'next/link'
 
 function LoginForm() {
-  const router = useRouter()
   const searchParams = useSearchParams()
   const callbackUrl = searchParams.get('callbackUrl') || '/'
 
@@ -27,6 +26,10 @@ function LoginForm() {
     setError(null)
 
     try {
+      // redirect: true → NextAuth callback URL'e yönlendirir, session cookie set edilir
+      // Hata durumunda NextAuth ?error=credentials girer ama bizim authorize null döndüğü için
+      // callback URL'e gider. Bu yüzden önce manuel kontrol yapıp doğru credentialar ile
+      // redirect: true çağırıyoruz.
       const result = await signIn('credentials', {
         email,
         password,
@@ -35,13 +38,18 @@ function LoginForm() {
 
       if (result?.error) {
         setError('Email veya şifre hatalı')
+        setLoading(false)
       } else if (result?.ok) {
-        router.push(callbackUrl)
-        router.refresh()
+        // Başarılı — callback URL'e yönlendir
+        // callbackUrl absolute URL olabilir (localhost'a yönlendirmeyi önlemek için
+        // sadece path kısmını kullan)
+        const safeUrl = callbackUrl.startsWith('http')
+          ? new URL(callbackUrl).pathname
+          : callbackUrl
+        window.location.href = safeUrl || '/'
       }
     } catch (err) {
       setError('Giriş yapılamadı, tekrar deneyin')
-    } finally {
       setLoading(false)
     }
   }

@@ -5,9 +5,8 @@ generator client {
 }
 
 datasource db {
-  provider  = "postgresql"
+  provider  = "sqlite"
   url       = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL")
 }
 
 model Listing {
@@ -62,7 +61,6 @@ model Listing {
   fuelConsumptionSource    String? @default("factory") @map("fuel_consumption_source")
 
   priceHistory    PriceHistory[]
-  favorites       UserFavorite[]
   duplicateGroupId String? @map("duplicate_group_id")
 
   @@index([sourceName])
@@ -138,7 +136,6 @@ model UserFavorite {
   createdAt   DateTime @default(now()) @map("created_at")
 
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  listing     Listing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
 
   @@unique([userId, listingId])
   @@index([userId])

@@ -1,127 +1,130 @@
 'use client'
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useSession } from 'next-auth/react'
 
-// ── Favorites Storage (localStorage-based, no auth required) ────────────
+// ── Favorites Hook (DB-backed, kullanıcı bazlı) ─────────────────────────
 //
-// Stores favorited listing IDs in localStorage. Each device/browser has
-// its own favorites. No login needed — simple and effective for a
-// comparison shopping tool.
+// Giriş yapmış kullanıcının favorileri DB'de (UserFavorite tablosu) saklanır.
+// /api/favorites endpoint'i üzerinden GET/POST/DELETE yapılır.
 //
-// Storage format: string[] of listing IDs
-// Storage key: 'otodedektif:favorites'
+// Giriş yapmamış kullanıcı için favoriler devre dışıdır (count=0, toggle no-op).
 
-const STORAGE_KEY = 'otodedektif:favorites'
-const MAX_FAVORITES = 20
+const MAX_FAVORITES = 50
 
 export interface FavoriteItem {
   id: string
-  addedAt: string // ISO string
-}
-
-function readFromStorage(): FavoriteItem[] {
-  if (typeof window === 'undefined') return []
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY)
-    if (!raw) return []
-    const parsed = JSON.parse(raw)
-    if (!Array.isArray(parsed)) return []
-    return parsed.filter(
-      (x): x is FavoriteItem =>
-        x && typeof x.id === 'string' && typeof x.addedAt === 'string'
-    )
-  } catch {
-    return []
-  }
-}
-
-function writeToStorage(items: FavoriteItem[]): void {
-  if (typeof window === 'undefined') return
-  try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(items))
-    // Dispatch a custom event so other hook instances (in other components)
-    // can update their state in real-time.
-    window.dispatchEvent(new CustomEvent('otodedektif:favorites-changed'))
-  } catch (e) {
-    console.warn('[favorites] Failed to write to localStorage:', e)
-  }
+  addedAt: string
 }
 
 export function useFavorites() {
-  const [favorites, setFavorites] = useState<FavoriteItem[]>([])
+  const { data: session, status } = useSession()
+  const isAuthenticated = status === 'authenticated' && !!session?.user?.email
+
+  const [favoriteIds, setFavoriteIds] = useState<string[]>([])
   const [hydrated, setHydrated] = useState(false)
+  const [loading, setLoading] = useState(false)
 
-  // Initial load from localStorage
-  useEffect(() => {
-    setFavorites(readFromStorage())
-    setHydrated(true)
-
-    // Listen for changes from other hook instances
-    const handler = () => setFavorites(readFromStorage())
-    window.addEventListener('otodedektif:favorites-changed', handler)
-    window.addEventListener('storage', handler)
-
-    return () => {
-      window.removeEventListener('otodedektif:favorites-changed', handler)
-      window.removeEventListener('storage', handler)
+  // Favorileri DB'den yükle (giriş yapmış kullanıcı için)
+  const refreshFavorites = useCallback(async () => {
+    if (!isAuthenticated) {
+      setFavoriteIds([])
+      setHydrated(true)
+      return
     }
-  }, [])
-
-  const isFavorite = useCallback(
-    (id: string): boolean => favorites.some((f) => f.id === id),
-    [favorites]
-  )
-
-  const addFavorite = useCallback((id: string): boolean => {
-    const current = readFromStorage()
-    if (current.some((f) => f.id === id)) return false // already favorite
-    if (current.length >= MAX_FAVORITES) {
-      console.warn(`[favorites] Max ${MAX_FAVORITES} favorites reached`)
-      return false
-    }
-    const newItem: FavoriteItem = { id, addedAt: new Date().toISOString() }
-    writeToStorage([...current, newItem])
-    return true
-  }, [])
-
-  const removeFavorite = useCallback((id: string): void => {
-    const current = readFromStorage()
-    writeToStorage(current.filter((f) => f.id !== id))
-  }, [])
-
-  const toggleFavorite = useCallback((id: string): void => {
-    const current = readFromStorage()
-    if (current.some((f) => f.id === id)) {
-      writeToStorage(current.filter((f) => f.id !== id))
-    } else {
-      if (current.length >= MAX_FAVORITES) {
-        console.warn(`[favorites] Max ${MAX_FAVORITES} favorites reached`)
+    setLoading(true)
+    try {
+      const res = await fetch('/api/favorites')
+      if (!res.ok) {
+        setFavoriteIds([])
         return
       }
-      const newItem: FavoriteItem = { id, addedAt: new Date().toISOString() }
-      writeToStorage([...current, newItem])
+      const data = await res.json()
+      setFavoriteIds(Array.isArray(data.favorites) ? data.favorites : [])
+    } catch (err) {
+      console.warn('[favorites] Failed to load:', err)
+      setFavoriteIds([])
+    } finally {
+      setHydrated(true)
+      setLoading(false)
     }
-  }, [])
+  }, [isAuthenticated])
 
-  const clearAll = useCallback((): void => {
-    writeToStorage([])
-  }, [])
+  // İlk yükleme + auth durumu değişince yeniden yükle
+  useEffect(() => {
+    refreshFavorites()
+  }, [refreshFavorites])
 
-  // useMemo prevents favoriteIds from creating a new array reference on
-  // every render, which would cause infinite re-render loops in consumers
-  // that depend on favoriteIds (e.g. FavoritesPanel's fetchListings).
-  const favoriteIds = useMemo(() => favorites.map((f) => f.id), [favorites])
+  const isFavorite = useCallback(
+    (id: string): boolean => favoriteIds.includes(id),
+    [favoriteIds]
+  )
+
+  const toggleFavorite = useCallback(async (id: string): Promise<void> => {
+    if (!isAuthenticated) return
+    const isFav = favoriteIds.includes(id)
+    // Optimistic update — UI hemen güncellensin
+    setFavoriteIds(prev => isFav ? prev.filter(x => x !== id) : [...prev, id])
+    try {
+      const res = await fetch('/api/favorites', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ listingId: id, action: isFav ? 'remove' : 'add' }),
+      })
+      if (!res.ok) {
+        // Revert on error
+        setFavoriteIds(prev => isFav ? [...prev, id] : prev.filter(x => x !== id))
+      }
+    } catch (err) {
+      // Revert on error
+      setFavoriteIds(prev => isFav ? [...prev, id] : prev.filter(x => x !== id))
+    }
+  }, [isAuthenticated, favoriteIds])
+
+  const addFavorite = useCallback(async (id: string): Promise<boolean> => {
+    if (!isAuthenticated) return false
+    if (favoriteIds.includes(id)) return false
+    if (favoriteIds.length >= MAX_FAVORITES) return false
+    await toggleFavorite(id)
+    return true
+  }, [isAuthenticated, favoriteIds, toggleFavorite])
+
+  const removeFavorite = useCallback(async (id: string): Promise<void> => {
+    if (!isAuthenticated) return
+    await toggleFavorite(id)
+  }, [isAuthenticated, toggleFavorite])
+
+  const clearAll = useCallback(async (): Promise<void> => {
+    if (!isAuthenticated) return
+    // Tek tek sil
+    await Promise.all(favoriteIds.map(id =>
+      fetch('/api/favorites', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ listingId: id, action: 'remove' }),
+      }).catch(() => {})
+    ))
+    setFavoriteIds([])
+  }, [isAuthenticated, favoriteIds])
+
+  const favorites = useMemo<FavoriteItem[]>(
+    () => favoriteIds.map(id => ({ id, addedAt: new Date().toISOString() })),
+    [favoriteIds]
+  )
 
   return {
     favorites,
     favoriteIds,
-    count: favorites.length,
+    count: favoriteIds.length,
     max: MAX_FAVORITES,
     hydrated,
+    loading,
+    isAuthenticated,
     isFavorite,
     addFavorite,
     removeFavorite,
     toggleFavorite,
     clearAll,
+    refreshFavorites,
   }
 }

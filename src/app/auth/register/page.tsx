@@ -40,18 +40,19 @@ export default function RegisterPage() {
         return
       }
 
-      // Auto-login after register
+      // Auto-login after register — client-side redirect (NextAuth redirect:true
+      // bazen localhost'a yönlendiriyor, bunu önlemek için manuel yönlendirme)
       const result = await signIn('credentials', {
         email,
         password,
         redirect: false,
       })
 
-      if (result?.ok) {
-        router.push('/')
-        router.refresh()
+      if (result?.ok && !result?.error) {
+        // Client-side redirect — mevcut domainde kal
+        window.location.href = '/'
       } else {
-        // Registration succeeded but auto-login failed — redirect to login
+        // Auto-login başarısız olursa login sayfasına yönlendir
         router.push('/auth/login')
       }
     } catch (err) {

@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { useSession, signOut } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
-import { User, LogOut, Settings, ChevronDown } from 'lucide-react'
+import { LogOut, ChevronDown, Heart } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 
@@ -80,25 +80,23 @@ export function UserMenu() {
           {/* Menu items */}
           <div className="py-1">
             <button
-              onClick={() => { setOpen(false); router.push('/auth/profile') }}
-              className="flex items-center gap-2 w-full px-4 py-2 text-sm text-foreground hover:bg-muted transition-colors"
+              onClick={() => { setOpen(false); router.push('/favorites') }}
+              className="flex items-center gap-2 w-full px-4 py-2 text-sm text-foreground hover:bg-muted transition-colors cursor-pointer"
             >
-              <User className="h-4 w-4" />
-              Profilim
-            </button>
-
-            <button
-              onClick={() => { setOpen(false); router.push('/?tab=favorites') }}
-              className="flex items-center gap-2 w-full px-4 py-2 text-sm text-foreground hover:bg-muted transition-colors"
-            >
-              <Settings className="h-4 w-4" />
+              <Heart className="h-4 w-4" />
               Favorilerim
             </button>
           </div>
 
           <div className="border-t py-1">
             <button
-              onClick={() => signOut({ callbackUrl: '/' })}
+              onClick={() => {
+                // signOut callbackUrl:'/' bazen localhost'a yönlendiriyor.
+                // redirect:false ile session'ı temizle, sonra manuel yönlendir.
+                signOut({ redirect: false }).then(() => {
+                  window.location.href = '/'
+                })
+              }}
               className="flex items-center gap-2 w-full px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
             >
               <LogOut className="h-4 w-4" />

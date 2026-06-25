@@ -55,8 +55,8 @@ function getListingAge(firstSeenAt: string): { days: number; label: string; colo
 export function ListingCard({ listing, onClick, index = 0 }: ListingCardProps) {
   const source = getSourcePlatform(listing.sourceName)
   const [imgError, setImgError] = useState(false)
-  const { isFavorite, toggleFavorite, hydrated } = useFavorites()
-  const fav = hydrated && isFavorite(listing.id)
+  const { isFavorite, toggleFavorite, hydrated, isAuthenticated } = useFavorites()
+  const fav = hydrated && isAuthenticated && isFavorite(listing.id)
 
   const listingAge = useMemo(() => getListingAge(listing.firstSeenAt), [listing.firstSeenAt])
 
@@ -84,6 +84,11 @@ export function ListingCard({ listing, onClick, index = 0 }: ListingCardProps) {
 
   const handleFavoriteClick = (e: React.MouseEvent) => {
     e.stopPropagation()
+    if (!isAuthenticated) {
+      // Giriş yapmamış kullanıcıyı login sayfasına yönlendir
+      window.location.href = '/auth/login?callbackUrl=' + encodeURIComponent(window.location.pathname + window.location.search)
+      return
+    }
     toggleFavorite(listing.id)
   }
 

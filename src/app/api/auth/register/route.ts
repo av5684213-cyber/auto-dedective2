@@ -29,14 +29,7 @@ export async function POST(request: Request) {
     const { email, password, name } = parseResult.data
     const emailLower = email.toLowerCase().trim()
 
-    let existing: any = null
-    try {
-      existing = await db.user.findUnique({ where: { email: emailLower } })
-    } catch (err) {
-      console.error('[register] DB error:', err)
-      return NextResponse.json({ error: 'Kayıt yapılamadı' }, { status: 500 })
-    }
-
+    const existing = await db.user.findUnique({ where: { email: emailLower } })
     if (existing) {
       return NextResponse.json({ error: 'Bu email zaten kayıtlı' }, { status: 409 })
     }

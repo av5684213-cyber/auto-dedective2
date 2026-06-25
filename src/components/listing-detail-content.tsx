@@ -42,6 +42,8 @@ import { ShareButton } from '@/components/share-button'
 import { LoanCalculator } from '@/components/loan-calculator'
 import { FuelCostCalculator } from '@/components/fuel-cost-calculator'
 import { DescriptionSummary } from '@/components/description-summary'
+import { ThemeToggle } from '@/components/theme-toggle'
+import { UserMenu } from '@/components/auth/user-menu'
 import { useFavorites } from '@/hooks/use-favorites'
 import { SOURCE_PLATFORMS, DEAL_TAG_CONFIG } from '@/lib/constants'
 import type { ListingWithScore } from '@/lib/types'
@@ -148,11 +150,20 @@ function SpecRow({ label, value, icon }: { label: string; value: string; icon?: 
 }
 
 function FavoriteToggleButton({ listing, compact }: { listing: ListingWithScore; compact?: boolean }) {
-  const { isFavorite, toggleFavorite, hydrated } = useFavorites()
-  const fav = hydrated && isFavorite(listing.id)
+  const { isFavorite, toggleFavorite, hydrated, isAuthenticated } = useFavorites()
+  const fav = hydrated && isAuthenticated && isFavorite(listing.id)
+
+  const handleClick = () => {
+    if (!isAuthenticated) {
+      window.location.href = '/auth/login?callbackUrl=' + encodeURIComponent(window.location.pathname + window.location.search)
+      return
+    }
+    toggleFavorite(listing.id)
+  }
+
   return (
     <button
-      onClick={() => toggleFavorite(listing.id)}
+      onClick={handleClick}
       className={`flex items-center justify-center gap-2 rounded-lg font-medium transition-all cursor-pointer ${
         compact ? 'w-10 h-10' : 'w-full py-2.5'
       } ${
@@ -160,10 +171,10 @@ function FavoriteToggleButton({ listing, compact }: { listing: ListingWithScore;
           ? 'bg-rose-500 text-white hover:bg-rose-600'
           : 'bg-muted hover:bg-muted/80 text-foreground border'
       }`}
-      title={fav ? 'Favorilerden çıkar' : 'Favorilere ekle'}
+      title={fav ? 'Favorilerden çıkar' : (isAuthenticated ? 'Favorilere ekle' : 'Favoriler için giriş yapın')}
     >
       <Heart className={`h-4 w-4 ${fav ? 'fill-current' : ''}`} />
-      {!compact && <span>{fav ? 'Favorilerde' : 'Favori Ekle'}</span>}
+      {!compact && <span>{fav ? 'Favorilerde' : (isAuthenticated ? 'Favori Ekle' : 'Giriş Yap')}</span>}
     </button>
   )
 }
@@ -263,6 +274,26 @@ export function ListingDetailContent({ initialListing, listingId }: ListingDetai
 
   return (
     <div className="bg-background min-h-screen">
+      {/* Sticky Header — ana sayfadaki ile birebir aynı */}
+      <header className="sticky top-0 z-40 bg-background/80 backdrop-blur-lg border-b border-border">
+        <div className="max-w-7xl mx-auto px-4 h-14 flex items-center justify-between gap-4">
+          {/* Logo */}
+          <a href="/" className="flex items-center gap-2 shrink-0">
+            <Car className="h-6 w-6 text-orange-600" />
+            <span className="text-base font-bold">
+              <span className="text-orange-600">Oto</span>
+              <span className="text-amber-500">dedektif</span>
+            </span>
+          </a>
+
+          {/* Theme Toggle + User Menu */}
+          <div className="shrink-0 flex items-center gap-2">
+            <ThemeToggle />
+            <UserMenu />
+          </div>
+        </div>
+      </header>
+
       {/* Breadcrumb */}
       <div className="border-b bg-muted/30">
         <div className="max-w-7xl mx-auto px-4 py-3">
@@ -438,7 +469,7 @@ export function ListingDetailContent({ initialListing, listingId }: ListingDetai
 
             {/* Tablar: Özellikler / Değerlendirme / Fiyat Geçmişi */}
             <div className="border-b">
-              <div className="flex gap-1 -mb-px overflow-x-auto">
+              <div className="flex gap-1 -mb-px overflow-x-auto min-w-0">
                 <TabButton active={activeTab === 'specs'} onClick={() => setActiveTab('specs')}>
                   📋 Özellikler
                 </TabButton>
@@ -656,7 +687,7 @@ export function ListingDetailContent({ initialListing, listingId }: ListingDetai
                     <button
                       key={comp.id}
                       onClick={() => handleComparableClick(comp)}
-                      className="flex gap-3 p-3 border rounded-xl hover:shadow-md hover:border-orange-300 transition-all text-left group cursor-pointer"
+                      className="flex gap-3 p-3 border rounded-xl hover:shadow-md hover:border-orange-300 transition-all text-left group cursor-pointer max-w-full overflow-hidden"
                     >
                       <div className="w-20 h-20 rounded-lg overflow-hidden bg-muted flex-shrink-0">
                         {comp.imageUrl ? (
@@ -768,7 +799,7 @@ function TabButton({ active, onClick, children }: { active: boolean; onClick: ()
   return (
     <button
       onClick={onClick}
-      className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+      className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap flex-shrink-0 ${
         active
           ? 'border-orange-600 text-orange-700 dark:text-orange-400'
           : 'border-transparent text-muted-foreground hover:text-foreground'

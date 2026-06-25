@@ -67,6 +67,11 @@ export default async function IlanDetayPage({
       },
     })
   } catch (err) {
+    // DB hatası — fallback'e düş
+  }
+
+  // DB'de bulunamadıysa fallback data'ya bak
+  if (!listing) {
     const fallback = loadFallbackListings().find((l) => l.id === id)
     if (fallback) listing = fallback
   }

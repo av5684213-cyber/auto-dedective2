@@ -1,15 +1,21 @@
-import { NextResponse } from 'next/server';
-import { db } from '@/lib/db';
+import { NextResponse } from 'next/server'
+import { db } from '@/lib/db'
+import { loadFallbackListings } from '@/lib/services/fallback-data'
 
 // ── GET /api/admin/trends ───────────────────────────────────────────────
 //
 // Returns price trends per make for the dashboard chart.
-// Auth: protected by middleware.
+// DB'de listing yoksa fallback data'dan hesaplar.
 
 export async function GET() {
   try {
-    // Marka bazlı ortalama fiyat + ilan sayısı
+    // Önce DB'den çekmeyi dene
     let makeStats: any[] = []
+    let sourceStats: any[] = []
+    let dealStats: any[] = []
+    let yearStats: any[] = []
+    let dbWorked = false
+
     try {
       makeStats = await db.listing.groupBy({
         by: ['make'],
@@ -19,43 +25,84 @@ export async function GET() {
         orderBy: { _count: { make: 'desc' } },
         take: 15,
       })
+      if (makeStats.length > 0) {
+        dbWorked = true
+        sourceStats = await db.listing.groupBy({
+          by: ['sourceName'],
+          where: { isActive: true },
+          _count: { sourceName: true },
+          _avg: { price: true },
+        })
+        dealStats = await db.listing.groupBy({
+          by: ['dealTag'],
+          where: { isActive: true, dealTag: { not: null } },
+          _count: { dealTag: true },
+        })
+        yearStats = await db.listing.groupBy({
+          by: ['year'],
+          where: { isActive: true },
+          _count: { year: true },
+          _avg: { price: true },
+          orderBy: { year: 'desc' },
+          take: 10,
+        })
+      }
     } catch (e) {
-      return NextResponse.json({ error: 'DB error' }, { status: 500 })
+      // DB çalışmıyor — fallback kullan
     }
 
-    // Kaynak bazlı dağılım
-    let sourceStats: any[] = []
-    try {
-      sourceStats = await db.listing.groupBy({
-        by: ['sourceName'],
-        where: { isActive: true },
-        _count: { sourceName: true },
-        _avg: { price: true },
-      })
-    } catch {}
+    // DB boş/hata varsa fallback data'dan hesapla
+    if (!dbWorked || makeStats.length === 0) {
+      const fallback = loadFallbackListings()
+      const activeListings = fallback.filter(l => l.isActive !== false && !l.isDeleted)
 
-    // Deal tag dağılımı
-    let dealStats: any[] = []
-    try {
-      dealStats = await db.listing.groupBy({
-        by: ['dealTag'],
-        where: { isActive: true, dealTag: { not: null } },
-        _count: { dealTag: true },
-      })
-    } catch {}
+      // Marka bazlı
+      const makeMap = new Map<string, { sum: number; count: number }>()
+      for (const l of activeListings) {
+        const cur = makeMap.get(l.make) || { sum: 0, count: 0 }
+        cur.sum += l.price
+        cur.count++
+        makeMap.set(l.make, cur)
+      }
+      makeStats = Array.from(makeMap.entries())
+        .map(([make, v]) => ({ make, _avg: { price: v.sum / v.count }, _count: { make: v.count } }))
+        .sort((a, b) => b._count.make - a._count.make)
+        .slice(0, 15)
 
-    // Yıl bazlı dağılım
-    let yearStats: any[] = []
-    try {
-      yearStats = await db.listing.groupBy({
-        by: ['year'],
-        where: { isActive: true },
-        _count: { year: true },
-        _avg: { price: true },
-        orderBy: { year: 'desc' },
-        take: 10,
-      })
-    } catch {}
+      // Kaynak bazlı
+      const sourceMap = new Map<string, { sum: number; count: number }>()
+      for (const l of activeListings) {
+        const cur = sourceMap.get(l.sourceName) || { sum: 0, count: 0 }
+        cur.sum += l.price
+        cur.count++
+        sourceMap.set(l.sourceName, cur)
+      }
+      sourceStats = Array.from(sourceMap.entries())
+        .map(([sourceName, v]) => ({ sourceName, _avg: { price: v.sum / v.count }, _count: { sourceName: v.count } }))
+
+      // Deal tag bazlı
+      const dealMap = new Map<string, number>()
+      for (const l of activeListings) {
+        if (l.dealTag) {
+          dealMap.set(l.dealTag, (dealMap.get(l.dealTag) || 0) + 1)
+        }
+      }
+      dealStats = Array.from(dealMap.entries())
+        .map(([dealTag, count]) => ({ dealTag, _count: { dealTag: count } }))
+
+      // Yıl bazlı
+      const yearMap = new Map<number, { sum: number; count: number }>()
+      for (const l of activeListings) {
+        const cur = yearMap.get(l.year) || { sum: 0, count: 0 }
+        cur.sum += l.price
+        cur.count++
+        yearMap.set(l.year, cur)
+      }
+      yearStats = Array.from(yearMap.entries())
+        .map(([year, v]) => ({ year, _avg: { price: v.sum / v.count }, _count: { year: v.count } }))
+        .sort((a, b) => b.year - a.year)
+        .slice(0, 10)
+    }
 
     const result = {
       makes: makeStats.map((m: any) => ({

@@ -31,7 +31,7 @@ export function middleware(request: NextRequest) {
 
   // Public admin read endpoints (safe — only aggregate stats from fallback data)
   // These are used by the dashboard UI which has no admin auth.
-  const PUBLIC_READ_PATHS = ['/api/admin/stats', '/api/admin/adapters'];
+  const PUBLIC_READ_PATHS = ['/api/admin/stats', '/api/admin/adapters', '/api/admin/trends'];
   if (PUBLIC_READ_PATHS.some((p) => pathname === p)) {
     return NextResponse.next();
   }

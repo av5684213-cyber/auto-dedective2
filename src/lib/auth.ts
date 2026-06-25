@@ -3,14 +3,14 @@
 // Credentials-based auth (email + password).
 // JWT session (serverless-friendly, no DB session needed).
 // bcryptjs for password hashing.
+// SQLite DB (Prisma) — kullanıcılar ve favoriler DB'de saklanır.
 
 import type { NextAuthOptions } from 'next-auth'
 import CredentialsProvider from 'next-auth/providers/credentials'
 import bcrypt from 'bcryptjs'
 import { db } from '@/lib/db'
-import { randomBytes } from 'crypto'
 
-export const NEXTAUTH_SECRET = process.env.NEXTAUTH_SECRET || randomBytes(32).toString('hex')
+export const NEXTAUTH_SECRET = process.env.NEXTAUTH_SECRET || 'otodedektif-dev-secret-stable-do-not-change-2026'
 
 export const authOptions: NextAuthOptions = {
   providers: [
@@ -22,28 +22,20 @@ export const authOptions: NextAuthOptions = {
       },
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) {
-          throw new Error('Email ve şifre gerekli')
+          return null
         }
 
-        // Find user by email
-        let user: any = null
-        try {
-          user = await db.user.findUnique({
-            where: { email: credentials.email.toLowerCase().trim() },
-          })
-        } catch (err) {
-          console.error('[auth] DB error during login:', err)
-          throw new Error('Giriş yapılamadı, tekrar deneyin')
-        }
+        const user = await db.user.findUnique({
+          where: { email: credentials.email.toLowerCase().trim() },
+        })
 
         if (!user) {
-          throw new Error('Email veya şifre hatalı')
+          return null
         }
 
-        // Verify password
         const isValid = await bcrypt.compare(credentials.password, user.passwordHash)
         if (!isValid) {
-          throw new Error('Email veya şifre hatalı')
+          return null
         }
 
         return {
@@ -63,23 +55,6 @@ export const authOptions: NextAuthOptions = {
 
   jwt: {
     secret: NEXTAUTH_SECRET,
-  },
-
-  callbacks: {
-    async jwt({ token, user }) {
-      if (user) {
-        token.id = (user as any).id
-        token.role = (user as any).role
-      }
-      return token
-    },
-    async session({ session, token }) {
-      if (session.user) {
-        (session.user as any).id = token.id
-        (session.user as any).role = token.role
-      }
-      return session
-    },
   },
 
   pages: {

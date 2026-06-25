@@ -20,6 +20,9 @@ export async function generateMetadata({
   try {
     listing = await db.listing.findUnique({ where: { id } })
   } catch {
+    // DB hatası — fallback'e düş
+  }
+  if (!listing) {
     const fallback = loadFallbackListings().find((l) => l.id === id)
     if (fallback) listing = fallback
   }
@@ -46,6 +49,9 @@ export default async function YonlendirPage({
   try {
     listing = await db.listing.findUnique({ where: { id } })
   } catch {
+    // DB hatası — fallback'e düş
+  }
+  if (!listing) {
     const fallback = loadFallbackListings().find((l) => l.id === id)
     if (fallback) listing = fallback
   }

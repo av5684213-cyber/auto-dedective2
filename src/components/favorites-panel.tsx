@@ -28,22 +28,22 @@ function getSourcePlatform(sourceName: string) {
 }
 
 export function FavoritesPanel() {
-  const { favorites, favoriteIds, count, removeFavorite, clearAll, hydrated } = useFavorites()
+  const { favoriteIds, count, removeFavorite, clearAll, hydrated, isAuthenticated } = useFavorites()
   const [listings, setListings] = useState<ListingWithScore[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedForCompare, setSelectedForCompare] = useState<string[]>([])
   const [compareOpen, setCompareOpen] = useState(false)
 
-  // Fetch favorited listings.
-  //
-  // CRITICAL: We use favoriteIds.join(',') as the dependency key (a primitive
-  // string) instead of favoriteIds (an array). This prevents infinite loops
-  // because join(',') only changes when the actual IDs change, not when the
-  // array reference changes.
+  // Fetch favorited listings — GET /api/favorites DB'den döner
   const favoriteIdsKey = favoriteIds.join(',')
 
   const fetchListings = useCallback(async () => {
-    if (!hydrated || favoriteIds.length === 0) {
+    if (!hydrated || !isAuthenticated) {
+      setListings([])
+      setLoading(false)
+      return
+    }
+    if (favoriteIds.length === 0) {
       setListings([])
       setLoading(false)
       return
@@ -51,11 +51,7 @@ export function FavoritesPanel() {
 
     setLoading(true)
     try {
-      const res = await fetch('/api/favorites', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ids: favoriteIds }),
-      })
+      const res = await fetch('/api/favorites')
       if (!res.ok) {
         console.error('Favorites API error:', res.status)
         setListings([])
@@ -70,14 +66,13 @@ export function FavoritesPanel() {
       setLoading(false)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [favoriteIdsKey, hydrated])
+  }, [favoriteIdsKey, hydrated, isAuthenticated])
 
   useEffect(() => {
     fetchListings()
   }, [fetchListings])
 
   // Filter out selected IDs that no longer exist in favorites.
-  // Uses favoriteIdsKey (primitive string) to avoid re-render loops.
   useEffect(() => {
     setSelectedForCompare((prev) => prev.filter((id) => favoriteIds.includes(id)))
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -126,6 +121,35 @@ export function FavoritesPanel() {
             </Card>
           ))}
         </div>
+      </div>
+    )
+  }
+
+  // Giriş yapmamış kullanıcı
+  if (!isAuthenticated) {
+    return (
+      <div className="max-w-5xl mx-auto p-4 pt-6">
+        <div className="flex items-center gap-2 mb-6">
+          <Heart className="h-5 w-5 text-rose-500" />
+          <h2 className="text-xl font-bold">Favorilerim</h2>
+        </div>
+        <Card className="border-dashed">
+          <CardContent className="p-8 text-center">
+            <Heart className="h-12 w-12 text-muted-foreground/30 mx-auto mb-3" />
+            <h3 className="font-semibold mb-1">Favorilerinizi görmek için giriş yapın</h3>
+            <p className="text-sm text-muted-foreground mb-4">
+              Kayıt olun veya giriş yapın, favori ilanlarınız hesabınıza kaydedilsin.
+            </p>
+            <div className="flex items-center justify-center gap-2">
+              <a href="/auth/login" className="px-4 py-2 rounded-lg bg-orange-600 text-white text-sm font-medium hover:bg-orange-700 transition-colors">
+                Giriş Yap
+              </a>
+              <a href="/auth/register" className="px-4 py-2 rounded-lg border text-sm font-medium hover:bg-muted transition-colors">
+                Kayıt Ol
+              </a>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     )
   }

@@ -52,6 +52,12 @@ export function PriceTrends() {
 
   if (!data) return null
 
+  // Defensive: API bazen boş/pars hatalı dönebilir
+  const deals = Array.isArray(data.deals) ? data.deals : []
+  const sources = Array.isArray(data.sources) ? data.sources : []
+  const years = Array.isArray(data.years) ? data.years : []
+  const makes = Array.isArray(data.makes) ? data.makes : []
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -69,7 +75,7 @@ export function PriceTrends() {
         </CardHeader>
         <CardContent>
           <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={data.makes} layout="vertical" margin={{ left: 20, right: 20 }}>
+            <BarChart data={makes} layout="vertical" margin={{ left: 20, right: 20 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
               <XAxis
                 type="number"
@@ -111,7 +117,7 @@ export function PriceTrends() {
             <ResponsiveContainer width="100%" height={250}>
               <PieChart>
                 <Pie
-                  data={data.deals}
+                  data={deals}
                   dataKey="count"
                   nameKey="tag"
                   cx="50%"
@@ -121,7 +127,7 @@ export function PriceTrends() {
                   labelLine={false}
                   fontSize={10}
                 >
-                  {data.deals.map((entry: any, i: number) => (
+                  {deals.map((entry: any, i: number) => (
                     <Cell key={i} fill={DEAL_COLORS[entry.tag] || '#9ca3af'} />
                   ))}
                 </Pie>
@@ -141,7 +147,7 @@ export function PriceTrends() {
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={250}>
-              <BarChart data={data.sources} margin={{ top: 10 }}>
+              <BarChart data={sources} margin={{ top: 10 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                 <XAxis dataKey="source" tick={{ fontSize: 11 }} />
                 <YAxis tick={{ fontSize: 11 }} />
@@ -169,7 +175,7 @@ export function PriceTrends() {
         </CardHeader>
         <CardContent>
           <ResponsiveContainer width="100%" height={250}>
-            <BarChart data={data.years} margin={{ top: 10 }}>
+            <BarChart data={years} margin={{ top: 10 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
               <XAxis dataKey="year" tick={{ fontSize: 11 }} />
               <YAxis tickFormatter={formatPrice} tick={{ fontSize: 11 }} />
