@@ -6,6 +6,7 @@ import { listingsQuerySchema, safeParse, type ListingsQuery } from '@/lib/valida
 import { transformListing } from '@/lib/utils/transform-listing';
 import { queryFallbackListings } from '@/lib/services/fallback-data';
 import { liveScrapeLetgo } from '@/lib/services/letgo-sitemap-scraper';
+import { isPartOrAccessory } from '@/lib/services/parts-filter';
 
 // ── Helper: Parse query params with Zod ────────────────────────────────
 
@@ -106,6 +107,16 @@ function buildWhereClause(filters: SearchFilters) {
     isDeleted: false,
   };
 
+  // Minimum fiyat eşiği — parça/yedek parça ilanlarını ele
+  // 30.000 TL altındaki ilanlar genelde parça, tampon, motor, far vb.
+  // Kullanıcı priceMin belirtmediyse bile bu eşik uygulanır
+  const effectivePriceMin = Math.max(filters.priceMin || 0, 30000)
+  if (filters.priceMax) {
+    where.price = { gte: effectivePriceMin, lte: filters.priceMax }
+  } else {
+    where.price = { gte: effectivePriceMin }
+  }
+
   // Marka — çoklu seçim, case-insensitive (exact match)
   const makeFilter = buildMultiFilter(filters.make);
   if (makeFilter) where.make = makeFilter;
@@ -142,13 +153,8 @@ function buildWhereClause(filters: SearchFilters) {
     where.year = yearCondition;
   }
 
-  // Fiyat aralığı
-  if (filters.priceMin || filters.priceMax) {
-    const priceCondition: Record<string, number> = {};
-    if (filters.priceMin) priceCondition.gte = filters.priceMin;
-    if (filters.priceMax) priceCondition.lte = filters.priceMax;
-    where.price = priceCondition;
-  }
+  // Fiyat aralığı yukarıda (effectivePriceMin ile) handle edildi
+  // — priceMin veya priceMax verilmese bile 30.000 TL altı elelenir
 
   // KM aralığı (min + max)
   if (filters.mileageMin || filters.mileageMax) {

@@ -123,6 +123,18 @@ export async function POST(request: Request) {
   // Step 4: Valuation
   try { const v = await valueAllListings(); results.valuationUpdated = v.updated; } catch {}
 
+  // Step 4.5: Parça tespit ve temizlik bot'u — yeni ilanlardaki parçaları ele
+  let partsCleaned = 0;
+  try {
+    const { runPartsCleaningBot } = await import('@/lib/services/parts-filter');
+    const partsResult = await runPartsCleaningBot();
+    partsCleaned = partsResult.cleaned;
+    console.log(`[cron] Parts cleaner: ${partsCleaned} parça ilanı pasife alındı`);
+  } catch (e) {
+    console.error('[cron] Parts cleaner failed:', e);
+  }
+  (results as any).partsCleaned = partsCleaned;
+
   // Step 5: Run alert matching engine (email + push + telegram)
   let alertsTriggered = 0;
   let alertStats: { email: number; push: number; telegram: number; matched: number } = { email: 0, push: 0, telegram: 0, matched: 0 };

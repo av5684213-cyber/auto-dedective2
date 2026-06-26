@@ -9,7 +9,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Separator } from '@/components/ui/separator'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import {
-  RefreshCw, Car, MapPin, BarChart3, TrendingUp, Database,
+  RefreshCw, Car, MapPin, BarChart3, TrendingUp, Database, ShieldCheck,
   Clock, CheckCircle, XCircle, Loader2, Zap
 } from 'lucide-react'
 import { DealBadge } from '@/components/deal-badge'
@@ -43,6 +43,8 @@ export function StatsDashboard({ onDealTagClick }: { onDealTagClick?: (tag: stri
   const [stats, setStats] = useState<StatsData | null>(null)
   const [loading, setLoading] = useState(true)
   const [scraping, setScraping] = useState(false)
+  const [cleaningParts, setCleaningParts] = useState(false)
+  const [partsResult, setPartsResult] = useState<{ cleaned: number; scanned: number } | null>(null)
 
   const fetchStats = useCallback(async () => {
     try {
@@ -91,6 +93,34 @@ export function StatsDashboard({ onDealTagClick }: { onDealTagClick?: (tag: stri
       }, 2000)
     } catch {
       setScraping(false)
+    }
+  }
+
+  // Parça temizlik bot'unu manuel tetikle
+  const handleCleanParts = async () => {
+    setCleaningParts(true)
+    setPartsResult(null)
+    try {
+      const adminToken = typeof window !== 'undefined'
+        ? (localStorage.getItem('admin_token') || '656864b5db4b673ed683fc64c0daa91370266da251179178963799d379da610b')
+        : '656864b5db4b673ed683fc64c0daa91370266da251179178963799d379da610b'
+      const res = await fetch('/api/admin/clean-parts', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${adminToken}` }
+      })
+      const data = await res.json()
+      if (data.ok) {
+        setPartsResult({ cleaned: data.cleaned, scanned: data.scanned })
+        // İstatistikleri yenile
+        setTimeout(() => fetchStats(), 1000)
+      } else {
+        setPartsResult({ cleaned: 0, scanned: 0 })
+      }
+    } catch (e) {
+      console.error('Parça temizlik hatası:', e)
+      setPartsResult({ cleaned: 0, scanned: 0 })
+    } finally {
+      setCleaningParts(false)
     }
   }
 
@@ -188,8 +218,30 @@ export function StatsDashboard({ onDealTagClick }: { onDealTagClick?: (tag: stri
         </motion.div>
       </div>
 
-      {/* Refresh Button */}
-      <div className="flex justify-end">
+      {/* Refresh + Parts Cleaner Button */}
+      <div className="flex justify-end gap-2 flex-wrap">
+        {/* Parça Temizlik Bot'u */}
+        <Button
+          onClick={handleCleanParts}
+          disabled={cleaningParts}
+          variant="outline"
+          className="gap-2 border-orange-200 text-orange-700 hover:bg-orange-50 hover:text-orange-800 dark:border-orange-900 dark:text-orange-400"
+          title="Parça/yedek parça ilanlarını tespit edip pasife al"
+        >
+          {cleaningParts ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Parçalar Temizleniyor...
+            </>
+          ) : (
+            <>
+              <ShieldCheck className="h-4 w-4" />
+              Parça Temizlik Bot'u
+            </>
+          )}
+        </Button>
+
+        {/* Veri Yenile */}
         <Button
           onClick={handleScrape}
           disabled={scraping}
@@ -208,6 +260,30 @@ export function StatsDashboard({ onDealTagClick }: { onDealTagClick?: (tag: stri
           )}
         </Button>
       </div>
+
+      {/* Parça temizlik sonucu */}
+      {partsResult && (
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className={`p-3 rounded-lg border ${partsResult.cleaned > 0
+            ? 'bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-900 text-green-800 dark:text-green-400'
+            : 'bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-900 text-blue-800 dark:text-blue-400'
+          } text-sm flex items-center gap-2`}
+        >
+          <ShieldCheck className="h-4 w-4 shrink-0" />
+          {partsResult.cleaned > 0 ? (
+            <span>
+              <strong>{partsResult.cleaned} parça ilanı</strong> tespit edildi ve pasife alındı.
+              (Toplam {partsResult.scanned} ilan tarandı)
+            </span>
+          ) : (
+            <span>
+              Temizlik tamamlandı — parça ilanı bulunamadı. (Toplam {partsResult.scanned} ilan tarandı)
+            </span>
+          )}
+        </motion.div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Listings per Source */}

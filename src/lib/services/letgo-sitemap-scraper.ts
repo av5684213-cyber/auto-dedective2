@@ -13,6 +13,7 @@
 import axios, { type AxiosRequestConfig } from 'axios';
 import * as cheerio from 'cheerio';
 import type { ListingRaw } from '@/lib/adapters/base';
+import { isPartOrAccessory } from './parts-filter';
 import type { SearchFilters } from '@/lib/types';
 
 const SITEMAP_INDEX_URL = 'https://www.letgo.com/sitemap-item-index.xml';
@@ -304,7 +305,7 @@ function parseListingPage(url: string, html: string): ListingRaw | null {
   const imgMatch = html.match(OG_IMAGE_RE);
   const imageUrl = imgMatch?.[1];
 
-  return {
+  const listing: ListingRaw = {
     sourceName: 'letgo', sourceUrl: url, vin: undefined,
     make, model: model || 'Bilinmiyor', trim: undefined,
     year, price, currency: 'TRY',
@@ -315,6 +316,13 @@ function parseListingPage(url: string, html: string): ListingRaw | null {
     imageUrl, imageUrls: imageUrl ? [imageUrl] : [],
     description: title,
   };
+
+  // Parça/yedek parça filtresi — parça ise DB'ye yazma
+  if (isPartOrAccessory(listing)) {
+    return null;
+  }
+
+  return listing;
 }
 
 async function fetchAndParseOne(url: string): Promise<ListingRaw | null> {
