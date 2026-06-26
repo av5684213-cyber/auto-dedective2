@@ -106,19 +106,26 @@ function buildWhereClause(filters: SearchFilters) {
     isDeleted: false,
   };
 
-  // Marka — çoklu seçim, case-insensitive
+  // Marka — çoklu seçim, case-insensitive (exact match)
   const makeFilter = buildMultiFilter(filters.make);
   if (makeFilter) where.make = makeFilter;
 
-  // Model — çoklu seçim VEYA partial match (q varsa contains)
-  // Eğer filters.model string ise partial match (içerir), array ise exact match (in)
+  // Model — HER ZAMAN partial match (contains), case-insensitive
+  // "320i" yazınca "3 serisi 320i m sport" eşleşir
+  // Çoklu model seçilse bile her biri contains olarak OR ile birleştirilir
   if (filters.model) {
-    if (Array.isArray(filters.model)) {
-      const modelFilter = buildMultiFilter(filters.model);
-      if (modelFilter) where.model = modelFilter;
-    } else {
-      // String ise partial match — "320i" yazınca "3 serisi 320i m sport" eşleşir
-      where.model = buildContainsFilter(filters.model);
+    const models = Array.isArray(filters.model) ? filters.model.filter(Boolean) : [filters.model];
+    const cleanModels = models.filter(Boolean);
+    if (cleanModels.length === 1) {
+      where.model = { contains: cleanModels[0], mode: 'insensitive' };
+    } else if (cleanModels.length > 1) {
+      // Çoklu model → OR ile contains birleştir
+      if (where.OR) {
+        // Mevcut OR varsa (q'dan), genişlet
+        where.OR = [...where.OR, ...cleanModels.map(m => ({ model: { contains: m, mode: 'insensitive' as const } }))];
+      } else {
+        where.OR = cleanModels.map(m => ({ model: { contains: m, mode: 'insensitive' as const } }));
+      }
     }
   }
 
@@ -182,10 +189,22 @@ function buildWhereClause(filters: SearchFilters) {
     }
   }
 
-  // Şehir, ilçe — çoklu seçim
-  const cityFilter = buildMultiFilter(filters.city);
-  if (cityFilter) where.city = cityFilter;
+  // Şehir — contains (case-insensitive), "İstanbul" → "istanbul", "istanbul atasehir" eşleşir
+  if (filters.city) {
+    const cities = Array.isArray(filters.city) ? filters.city.filter(Boolean) : [filters.city];
+    const cleanCities = cities.filter(Boolean);
+    if (cleanCities.length === 1) {
+      where.city = { contains: cleanCities[0], mode: 'insensitive' };
+    } else if (cleanCities.length > 1) {
+      if (where.OR) {
+        where.OR = [...where.OR, ...cleanCities.map(c => ({ city: { contains: c, mode: 'insensitive' as const } }))];
+      } else {
+        where.OR = cleanCities.map(c => ({ city: { contains: c, mode: 'insensitive' as const } }));
+      }
+    }
+  }
 
+  // İlçe — çoklu seçim, exact match (ilçe adları daha standart)
   const districtFilter = buildMultiFilter(filters.district);
   if (districtFilter) where.district = districtFilter;
 
