@@ -170,7 +170,6 @@ export async function runAlertMatching(
 
       result.matchedPairs++
       const channels = parseChannels(alert.channels, alert.notifyEmail, alert.notifyPush)
-      const sentChannels: string[] = []
 
       const tasks: Promise<void>[] = []
 
@@ -197,7 +196,6 @@ export async function runAlertMatching(
           })
           if (r.ok) {
             result.sentEmail++
-            sentChannels.push('email')
           } else if (r.error && !r.error.includes('RESEND_API_KEY')) {
             result.errors.push(`email ${alert.user!.email}: ${r.error}`)
           }
@@ -222,7 +220,6 @@ export async function runAlertMatching(
             })
             if (r.ok) {
               result.sentPush++
-              if (!sentChannels.includes('push')) sentChannels.push('push')
             } else if (r.error === 'subscription_expired') {
               expiredPushEndpoints.push(sub.endpoint)
             } else if (r.error && !r.error.includes('VAPID')) {
@@ -257,7 +254,6 @@ export async function runAlertMatching(
             })
             if (r.ok) {
               result.sentTelegram++
-              sentChannels.push('telegram')
             } else if (r.error && !r.error.includes('TELEGRAM_BOT_TOKEN')) {
               result.errors.push(`telegram ${tg.chatId}: ${r.error}`)
             }
@@ -269,14 +265,16 @@ export async function runAlertMatching(
         await Promise.allSettled(tasks)
       }
 
-      // Bildirim gönderilmiş olarak işaretle (en az 1 kanaldan gitmiş olsun)
-      if (sentChannels.length > 0 && !opts.dryRun) {
+      // Eşleşme oldu mu? Bildirim gönderilemese bile (env yok) dedupe kaydı at
+      // Bu sayede env'ler eklenince aynı ilan tekrar bildirim oluşturmaz
+      if (!opts.dryRun) {
         try {
           await db.alertNotification.create({
             data: {
               alertId: alert.id,
               listingId: listing.id,
-              channels: JSON.stringify(sentChannels),
+              // Hangi kanallar DAHİL edilmeye çalışıldı (hepsini kaydet — env yoksa bile niyet kaydı)
+              channels: JSON.stringify(channels),
             },
           })
           await db.savedSearch.update({
