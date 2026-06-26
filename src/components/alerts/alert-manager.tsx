@@ -533,15 +533,18 @@ export function AlertManager({ open, onClose, currentFilters }: AlertManagerProp
   const handleTestChannel = async (ch: Channel) => {
     setTestingChannel(ch)
     try {
-      const endpoint = ch === 'push' ? '/api/push/test' : ch === 'telegram' ? '/api/telegram/test' : null
+      const endpoint = ch === 'push' ? '/api/push/test'
+        : ch === 'telegram' ? '/api/telegram/test'
+        : ch === 'email' ? '/api/alerts/test-email'
+        : null
       if (!endpoint) {
-        showToast('📧 Email testi için yeni ilan gelmesini bekleyin')
+        showToast('Bilinmeyen kanal')
         return
       }
       const res = await fetch(endpoint, { method: 'POST' })
       const data = await res.json()
       if (data.ok) {
-        showToast(`✅ ${ch === 'push' ? 'Push' : 'Telegram'} test mesajı gönderildi`)
+        showToast(`✅ ${ch === 'push' ? 'Push' : ch === 'telegram' ? 'Telegram' : 'Email'} test mesajı gönderildi — kutunu kontrol et`)
       } else {
         showToast(`❌ ${data.error || 'Test başarısız'}`)
       }
@@ -1120,6 +1123,17 @@ export function AlertManager({ open, onClose, currentFilters }: AlertManagerProp
                 )}
 
                 <div className="flex gap-2 pt-1">
+                  {channels.includes('email') && channelStatus.email && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleTestChannel('email')}
+                      disabled={testingChannel === 'email'}
+                      className="flex-1 text-xs h-7"
+                    >
+                      {testingChannel === 'email' ? <Loader2 className="h-3 w-3 animate-spin" /> : '📧 Email Test'}
+                    </Button>
+                  )}
                   {channelStatus.push?.subscribed && (
                     <Button
                       variant="ghost"
