@@ -20,43 +20,80 @@ function parseFilters(searchParams: URLSearchParams): SearchFilters {
     listingsQuerySchema,
     raw,
     {
-      make: undefined, model: undefined, yearMin: undefined, yearMax: undefined,
-      priceMin: undefined, priceMax: undefined, mileageMax: undefined,
+      make: undefined, model: undefined, trim: undefined,
+      yearMin: undefined, yearMax: undefined,
+      priceMin: undefined, priceMax: undefined,
+      mileageMin: undefined, mileageMax: undefined,
       fuelType: undefined, transmission: undefined, bodyType: undefined,
-      city: undefined, sellerType: undefined, dealTag: undefined,
+      color: undefined, colorExclude: undefined,
+      city: undefined, district: undefined,
+      sellerType: undefined, accidentStatus: undefined,
+      dealTag: undefined, dealScoreMin: undefined,
+      q: undefined,
       sortBy: 'deal_score_desc', page: 1, limit: 20,
     } as ListingsQuery,
     'listingsQuery',
   );
 
   return {
-    make: parsed.make, model: parsed.model,
+    make: parsed.make, model: parsed.model, trim: parsed.trim,
     yearMin: parsed.yearMin, yearMax: parsed.yearMax,
     priceMin: parsed.priceMin, priceMax: parsed.priceMax,
-    mileageMax: parsed.mileageMax,
+    mileageMin: parsed.mileageMin, mileageMax: parsed.mileageMax,
     fuelType: parsed.fuelType, transmission: parsed.transmission,
-    bodyType: parsed.bodyType, city: parsed.city,
-    sellerType: parsed.sellerType, dealTag: parsed.dealTag,
+    bodyType: parsed.bodyType,
+    color: parsed.color, colorExclude: parsed.colorExclude,
+    city: parsed.city, district: parsed.district,
+    sellerType: parsed.sellerType, accidentStatus: parsed.accidentStatus,
+    dealTag: parsed.dealTag, dealScoreMin: parsed.dealScoreMin,
+    q: parsed.q,
     sortBy: parsed.sortBy as SearchFilters['sortBy'],
     page: parsed.page, limit: parsed.limit,
   };
 }
 
+// ── Helper: Array'i Prisma where clause'ına çevir ────────────────────────
+// Boş array → filtre yok
+// Tek eleman → { equals: val, mode: 'insensitive' }
+// Çoklu → { in: [...], mode: 'insensitive' }
+function buildMultiFilter(values: string[] | string | undefined) {
+  if (!values) return undefined;
+  const arr = Array.isArray(values) ? values.filter(Boolean) : [values];
+  if (arr.length === 0) return undefined;
+  if (arr.length === 1) return { equals: arr[0], mode: 'insensitive' as const };
+  return { in: arr, mode: 'insensitive' as const };
+}
+
+// Build "içerir" filtresi (model, trim için partial match)
+function buildContainsFilter(value: string | undefined) {
+  if (!value) return undefined;
+  return { contains: value, mode: 'insensitive' as const };
+}
+
 function getCacheKey(filters: SearchFilters): string {
   const parts: string[] = ['listings'];
-  if (filters.make) parts.push(`make:${filters.make}`);
-  if (filters.model) parts.push(`model:${filters.model}`);
+  const arr = (v: any) => Array.isArray(v) ? v.join(',') : (v || '');
+  if (filters.make) parts.push(`make:${arr(filters.make)}`);
+  if (filters.model) parts.push(`model:${arr(filters.model)}`);
+  if (filters.trim) parts.push(`trim:${filters.trim}`);
   if (filters.yearMin) parts.push(`yearMin:${filters.yearMin}`);
   if (filters.yearMax) parts.push(`yearMax:${filters.yearMax}`);
   if (filters.priceMin) parts.push(`priceMin:${filters.priceMin}`);
   if (filters.priceMax) parts.push(`priceMax:${filters.priceMax}`);
+  if (filters.mileageMin) parts.push(`mileageMin:${filters.mileageMin}`);
   if (filters.mileageMax) parts.push(`mileageMax:${filters.mileageMax}`);
-  if (filters.fuelType) parts.push(`fuelType:${filters.fuelType}`);
-  if (filters.transmission) parts.push(`transmission:${filters.transmission}`);
-  if (filters.bodyType) parts.push(`bodyType:${filters.bodyType}`);
-  if (filters.city) parts.push(`city:${filters.city}`);
-  if (filters.sellerType) parts.push(`sellerType:${filters.sellerType}`);
-  if (filters.dealTag) parts.push(`dealTag:${filters.dealTag}`);
+  if (filters.fuelType) parts.push(`fuelType:${arr(filters.fuelType)}`);
+  if (filters.transmission) parts.push(`transmission:${arr(filters.transmission)}`);
+  if (filters.bodyType) parts.push(`bodyType:${arr(filters.bodyType)}`);
+  if (filters.color) parts.push(`color:${arr(filters.color)}`);
+  if (filters.colorExclude) parts.push(`colorExclude:${arr(filters.colorExclude)}`);
+  if (filters.city) parts.push(`city:${arr(filters.city)}`);
+  if (filters.district) parts.push(`district:${arr(filters.district)}`);
+  if (filters.sellerType) parts.push(`sellerType:${arr(filters.sellerType)}`);
+  if (filters.accidentStatus) parts.push(`accidentStatus:${arr(filters.accidentStatus)}`);
+  if (filters.dealTag) parts.push(`dealTag:${arr(filters.dealTag)}`);
+  if (filters.dealScoreMin) parts.push(`dealScoreMin:${filters.dealScoreMin}`);
+  if (filters.q) parts.push(`q:${filters.q}`);
   parts.push(`sortBy:${filters.sortBy || 'newest'}`);
   parts.push(`page:${filters.page || 1}`);
   parts.push(`limit:${filters.limit || 20}`);
@@ -69,27 +106,116 @@ function buildWhereClause(filters: SearchFilters) {
     isDeleted: false,
   };
 
-  if (filters.make) where.make = { equals: filters.make };
-  if (filters.model) where.model = { equals: filters.model };
+  // Marka — çoklu seçim, case-insensitive
+  const makeFilter = buildMultiFilter(filters.make);
+  if (makeFilter) where.make = makeFilter;
+
+  // Model — çoklu seçim VEYA partial match (q varsa contains)
+  // Eğer filters.model string ise partial match (içerir), array ise exact match (in)
+  if (filters.model) {
+    if (Array.isArray(filters.model)) {
+      const modelFilter = buildMultiFilter(filters.model);
+      if (modelFilter) where.model = modelFilter;
+    } else {
+      // String ise partial match — "320i" yazınca "3 serisi 320i m sport" eşleşir
+      where.model = buildContainsFilter(filters.model);
+    }
+  }
+
+  // Trim — partial match (contains)
+  if (filters.trim) {
+    where.trim = buildContainsFilter(filters.trim);
+  }
+
+  // Yıl aralığı
   if (filters.yearMin || filters.yearMax) {
     const yearCondition: Record<string, number> = {};
     if (filters.yearMin) yearCondition.gte = filters.yearMin;
     if (filters.yearMax) yearCondition.lte = filters.yearMax;
     where.year = yearCondition;
   }
+
+  // Fiyat aralığı
   if (filters.priceMin || filters.priceMax) {
     const priceCondition: Record<string, number> = {};
     if (filters.priceMin) priceCondition.gte = filters.priceMin;
     if (filters.priceMax) priceCondition.lte = filters.priceMax;
     where.price = priceCondition;
   }
-  if (filters.mileageMax) where.mileageKm = { lte: filters.mileageMax };
-  if (filters.fuelType) where.fuelType = { equals: filters.fuelType };
-  if (filters.transmission) where.transmission = { equals: filters.transmission };
-  if (filters.bodyType) where.bodyType = { equals: filters.bodyType };
-  if (filters.city) where.city = { equals: filters.city };
-  if (filters.sellerType) where.sellerType = { equals: filters.sellerType };
-  if (filters.dealTag) where.dealTag = { equals: filters.dealTag };
+
+  // KM aralığı (min + max)
+  if (filters.mileageMin || filters.mileageMax) {
+    const kmCondition: Record<string, number> = {};
+    if (filters.mileageMin) kmCondition.gte = filters.mileageMin;
+    if (filters.mileageMax) kmCondition.lte = filters.mileageMax;
+    where.mileageKm = kmCondition;
+  }
+
+  // Yakıt, vites, kasa — çoklu seçim
+  const fuelFilter = buildMultiFilter(filters.fuelType);
+  if (fuelFilter) where.fuelType = fuelFilter;
+
+  const transFilter = buildMultiFilter(filters.transmission);
+  if (transFilter) where.transmission = transFilter;
+
+  const bodyFilter = buildMultiFilter(filters.bodyType);
+  if (bodyFilter) where.bodyType = bodyFilter;
+
+  // Renk — çoklu seçim, contains (Beyaz → "Beyaz" ve "Beyaz/Siyah" eşleşir)
+  if (filters.color) {
+    const colors = Array.isArray(filters.color) ? filters.color : [filters.color];
+    const cleanColors = colors.filter(Boolean);
+    if (cleanColors.length === 1) {
+      where.color = { contains: cleanColors[0], mode: 'insensitive' };
+    } else if (cleanColors.length > 1) {
+      // Çoklu renk → OR ile birleştir
+      where.OR = cleanColors.map(c => ({ color: { contains: c, mode: 'insensitive' as const } }));
+    }
+  }
+
+  // Renk hariç tutma — NOT (color in [...])
+  if (filters.colorExclude) {
+    const excludeColors = Array.isArray(filters.colorExclude) ? filters.colorExclude : [filters.colorExclude];
+    const cleanExclude = excludeColors.filter(Boolean);
+    if (cleanExclude.length > 0) {
+      where.NOT = cleanExclude.map(c => ({ color: { contains: c, mode: 'insensitive' as const } }));
+    }
+  }
+
+  // Şehir, ilçe — çoklu seçim
+  const cityFilter = buildMultiFilter(filters.city);
+  if (cityFilter) where.city = cityFilter;
+
+  const districtFilter = buildMultiFilter(filters.district);
+  if (districtFilter) where.district = districtFilter;
+
+  // Satıcı tipi — çoklu seçim
+  const sellerFilter = buildMultiFilter(filters.sellerType);
+  if (sellerFilter) where.sellerType = sellerFilter;
+
+  // Kazalı durumu — çoklu seçim
+  const accidentFilter = buildMultiFilter(filters.accidentStatus);
+  if (accidentFilter) where.accidentStatus = accidentFilter;
+
+  // Fırsat etiketi — çoklu seçim
+  const dealTagFilter = buildMultiFilter(filters.dealTag);
+  if (dealTagFilter) where.dealTag = dealTagFilter;
+
+  // DealScore min (yıldız) — dealScore 0-100, 5 yıldıza normalize: score/20
+  if (filters.dealScoreMin && filters.dealScoreMin > 0) {
+    // 5 yıldız = 100, 4 yıldız = 80, 3 yıldız = 60, 2 yıldız = 40, 1 yıldız = 20
+    where.dealScore = { gte: filters.dealScoreMin * 20 };
+  }
+
+  // Serbest arama (q) — make + model + trim içinde OR
+  if (filters.q && filters.q.trim()) {
+    const q = filters.q.trim();
+    where.OR = [
+      { make: { contains: q, mode: 'insensitive' } },
+      { model: { contains: q, mode: 'insensitive' } },
+      { trim: { contains: q, mode: 'insensitive' } },
+    ];
+  }
 
   return where;
 }

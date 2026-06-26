@@ -2,20 +2,40 @@ import { z } from 'zod';
 
 // ── Zod Schemas for API Input Validation ───────────────────────────────
 
+// String veya string[] kabul eder (URL query'den gelir, virgülle ayrılmış da olabilir)
+const multiString = z.union([
+  z.string().trim(),
+  z.array(z.string().trim()),
+]).optional().transform(v => {
+  if (v === undefined) return undefined;
+  if (Array.isArray(v)) return v.filter(Boolean);
+  // Virgülle ayrılmış string ise array'e çevir
+  if (v.includes(',')) return v.split(',').map(s => s.trim()).filter(Boolean);
+  return v ? [v] : undefined;
+});
+
 export const listingsQuerySchema = z.object({
-  make: z.string().trim().optional(),
-  model: z.string().trim().optional(),
+  make: multiString,
+  model: multiString,
+  trim: z.string().trim().optional(),
   yearMin: z.coerce.number().int().min(1900).max(2100).optional(),
   yearMax: z.coerce.number().int().min(1900).max(2100).optional(),
   priceMin: z.coerce.number().min(0).optional(),
   priceMax: z.coerce.number().min(0).optional(),
+  mileageMin: z.coerce.number().int().min(0).optional(),
   mileageMax: z.coerce.number().int().min(0).optional(),
-  fuelType: z.string().trim().optional(),
-  transmission: z.string().trim().optional(),
-  bodyType: z.string().trim().optional(),
-  city: z.string().trim().optional(),
-  sellerType: z.string().trim().optional(),
-  dealTag: z.string().trim().optional(),
+  fuelType: multiString,
+  transmission: multiString,
+  bodyType: multiString,
+  color: multiString,
+  colorExclude: multiString,
+  city: multiString,
+  district: multiString,
+  sellerType: multiString,
+  accidentStatus: multiString,
+  dealTag: multiString,
+  dealScoreMin: z.coerce.number().min(0).max(5).optional(),
+  q: z.string().trim().optional(),
   sortBy: z
     .enum(['newest', 'price_asc', 'price_desc', 'year_desc', 'year_asc', 'mileage_asc', 'deal_score_desc'])
     .optional()

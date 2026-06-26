@@ -22,21 +22,33 @@ export interface RawListing {
   description?: string;
 }
 
-// Search filters
+// Search filters — UI'daki tüm filtreleri destekler
 export interface SearchFilters {
-  make?: string;
-  model?: string;
+  // Çoklu seçim (array) veya tek değer
+  make?: string | string[];
+  model?: string | string[];
+  trim?: string;
+  // Sayısal aralıklar
   yearMin?: number;
   yearMax?: number;
   priceMin?: number;
   priceMax?: number;
+  mileageMin?: number;
   mileageMax?: number;
-  fuelType?: string;
-  transmission?: string;
-  bodyType?: string;
-  city?: string;
-  sellerType?: string;
-  dealTag?: string;
+  // Kategorik — çoklu seçim destekli
+  fuelType?: string | string[];
+  transmission?: string | string[];
+  bodyType?: string | string[];
+  color?: string | string[];
+  colorExclude?: string | string[];
+  city?: string | string[];
+  district?: string | string[];
+  sellerType?: string | string[];
+  accidentStatus?: string | string[];
+  dealTag?: string | string[];
+  dealScoreMin?: number; // 0-5 yıldız
+  // Serbest arama (make+model+trim içinde)
+  q?: string;
   sortBy?:
     | 'price_asc'
     | 'price_desc'
