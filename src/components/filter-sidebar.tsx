@@ -116,6 +116,33 @@ function FilterContent({
 
       <ScrollArea className="flex-1">
         <div className="p-4 space-y-5">
+          {/* Sıralama — EN ÜSTTE SABİT */}
+          <div className="space-y-2 p-3 -mx-1 rounded-lg bg-orange-50 dark:bg-orange-950/20 border border-orange-200 dark:border-orange-900">
+            <label className="text-xs font-semibold text-orange-700 dark:text-orange-400 uppercase tracking-wider flex items-center gap-1.5">
+              <span className="w-1 h-1 rounded-full bg-orange-500" />
+              Sıralama
+            </label>
+            <Select
+              value={filters.sortBy || 'newest'}
+              onValueChange={(v) => updateFilter('sortBy', v)}
+            >
+              <SelectTrigger className="h-9 text-sm bg-background">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="newest">En Yeni İlanlar</SelectItem>
+                <SelectItem value="deal_score_desc">En Yüksek Otodedektif Puanı</SelectItem>
+                <SelectItem value="price_asc">Fiyat: Düşükten Yükseğe</SelectItem>
+                <SelectItem value="price_desc">Fiyat: Yüksekten Düşüğe</SelectItem>
+                <SelectItem value="year_desc">Yıl: En Yeni</SelectItem>
+                <SelectItem value="year_asc">Yıl: En Eski</SelectItem>
+                <SelectItem value="mileage_asc">Kilometre: En Düşük</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <Separator />
+
           {/* Marka */}
           <div className="space-y-2">
             <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Marka</label>
@@ -358,30 +385,6 @@ function FilterContent({
                 </button>
               ))}
             </div>
-          </div>
-
-          <Separator />
-
-          {/* Sıralama */}
-          <div className="space-y-2">
-            <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Sıralama</label>
-            <Select
-              value={filters.sortBy || 'newest'}
-              onValueChange={(v) => updateFilter('sortBy', v)}
-            >
-              <SelectTrigger className="h-9 text-sm">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="newest">En Yeni</SelectItem>
-                <SelectItem value="price_asc">Fiyat: Düşükten Yükseğe</SelectItem>
-                <SelectItem value="price_desc">Fiyat: Yüksekten Düşüğe</SelectItem>
-                <SelectItem value="year_desc">Yıl: En Yeni</SelectItem>
-                <SelectItem value="year_asc">Yıl: En Eski</SelectItem>
-                <SelectItem value="mileage_asc">Kilometre: En Düşük</SelectItem>
-                <SelectItem value="deal_score_desc">En İyi Fırsat</SelectItem>
-              </SelectContent>
-            </Select>
           </div>
         </div>
       </ScrollArea>
