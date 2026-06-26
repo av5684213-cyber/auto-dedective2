@@ -61,6 +61,13 @@ model Listing {
   // Fabrika verisi mi yoksa tahmini mi? ("factory" | "estimated")
   fuelConsumptionSource    String? @default("factory") @map("fuel_consumption_source")
 
+  // ── Bildirim alarmları için ek filtre alanları ────────────────────────────
+  // Kazalı durumu: "kazasiz" | "az_hasarli" | "orta_hasarli" | "agir_hasarli" | "belirsiz"
+  // Otomatik çıkarım: description'dan keyword match (boyalı, değişen, local, ağır hasar, pert)
+  accidentStatus          String?  @map("accident_status")
+  // Hasar kaydı detayı (description'dan çıkarılan özet)
+  damageInfo              String?  @map("damage_info")
+
   priceHistory    PriceHistory[]
   duplicateGroupId String? @map("duplicate_group_id")
 
@@ -74,6 +81,8 @@ model Listing {
   @@index([year])
   @@index([city])
   @@index([fuelType])
+  @@index([color])
+  @@index([accidentStatus])
 }
 
 model PriceHistory {

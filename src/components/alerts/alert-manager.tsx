@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Bell, BellOff, Trash2, Plus, X, BellRing, Mail, Smartphone, Send, CheckCircle2, AlertCircle, ExternalLink, Loader2 } from 'lucide-react'
+import { BellRing, Trash2, Plus, Mail, Smartphone, Send, CheckCircle2, AlertCircle, ExternalLink, Loader2, ChevronDown, X, Star, Filter } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent } from '@/components/ui/card'
@@ -13,13 +13,18 @@ import {
 } from '@/components/ui/dialog'
 import { useSession } from 'next-auth/react'
 import type { SearchFilters } from '@/lib/types'
-import { subscribeToPush, unsubscribeFromPush } from '@/lib/notifications/push-client'
+import { subscribeToPush } from '@/lib/notifications/push-client'
+import { FILTER_OPTIONS } from '@/lib/notifications/filter-options'
 
-// ── Alert Manager Component ─────────────────────────────────────────────
+// ── Alert Manager v3 — Detaylı Filtre Paneli ────────────────────────────
 //
-// Kullanıcı mevcut filtreleri "alarm" olarak kaydeder.
-// Yeni ilan geldiğinde email + browser push + Telegram bildirimi alır.
-// Modal olarak açılır — "Alarm Kur" butonundan tetiklenir.
+// 16+ filtre desteği:
+//   Marka (cascade), Model (cascade), Trim, Yıl aralığı, Fiyat aralığı,
+//   KM aralığı, Yakıt, Vites, Kasa tipi, Renk (+ hariç tutma),
+//   Şehir, İlçe, Satıcı tipi, Kazalı durumu, DealScore min, Fırsat etiketi
+//
+// Marka seçilince otomatik olarak o markanın modelleri /api/vehicles/models'den çekilir.
+// Şehir seçilince ilçeler /api/vehicles/districts'den çekilir.
 
 interface AlertManagerProps {
   open: boolean
@@ -52,6 +57,178 @@ const CHANNEL_META: Record<Channel, { icon: typeof Mail; label: string; desc: st
   telegram: { icon: Send, label: 'Telegram', desc: 'Bot üzerinden mesaj' },
 }
 
+// Çoklu seçim chip bileşeni
+function MultiSelectChips({
+  options,
+  selected,
+  onChange,
+  placeholder = 'Seçiniz...',
+  maxShow = 6,
+}: {
+  options: { value: string; label?: string; count?: number }[] | string[]
+  selected: string[]
+  onChange: (next: string[]) => void
+  placeholder?: string
+  maxShow?: number
+}) {
+  const [open, setOpen] = useState(false)
+  const [query, setQuery] = useState('')
+
+  const normalizedOptions = useMemo(() => {
+    return options.map(o => {
+      if (typeof o === 'string') return { value: o, label: o }
+      return { value: o.value, label: o.label || o.value, count: o.count }
+    })
+  }, [options])
+
+  const filtered = useMemo(() => {
+    if (!query) return normalizedOptions
+    return normalizedOptions.filter(o => o.label.toLowerCase().includes(query.toLowerCase()))
+  }, [normalizedOptions, query])
+
+  const toggle = (v: string) => {
+    if (selected.includes(v)) {
+      onChange(selected.filter(s => s !== v))
+    } else {
+      onChange([...selected, v])
+    }
+  }
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className="w-full px-3 py-2 bg-[#0F0F0F] border border-[#2A2A2A] rounded-md text-left flex items-center justify-between text-sm hover:border-[#3A3A3A]"
+      >
+        <span className={selected.length === 0 ? 'text-gray-500' : 'text-white'}>
+          {selected.length === 0 ? placeholder : `${selected.length} seçili`}
+        </span>
+        <ChevronDown className="h-3.5 w-3.5 text-gray-500" />
+      </button>
+
+      {selected.length > 0 && (
+        <div className="flex flex-wrap gap-1 mt-1.5">
+          {selected.slice(0, maxShow).map(s => (
+            <Badge key={s} variant="secondary" className="text-[10px] h-5 gap-0.5">
+              {s}
+              <button onClick={() => toggle(s)} className="ml-1 hover:text-red-400">
+                <X className="h-2.5 w-2.5" />
+              </button>
+            </Badge>
+          ))}
+          {selected.length > maxShow && (
+            <Badge variant="outline" className="text-[10px] h-5">+{selected.length - maxShow}</Badge>
+          )}
+        </div>
+      )}
+
+      {open && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+          <div className="absolute z-50 mt-1 w-full bg-[#0F0F0F] border border-[#2A2A2A] rounded-md shadow-xl max-h-60 overflow-y-auto">
+            <div className="p-2 border-b border-[#2A2A2A]">
+              <input
+                autoFocus
+                value={query}
+                onChange={e => setQuery(e.target.value)}
+                placeholder="Ara..."
+                className="w-full px-2 py-1 bg-[#1A1A1A] border border-[#2A2A2A] rounded text-xs text-white"
+              />
+            </div>
+            {filtered.length === 0 && (
+              <div className="p-3 text-center text-xs text-gray-500">Sonuç yok</div>
+            )}
+            {filtered.map(o => (
+              <button
+                key={o.value}
+                type="button"
+                onClick={() => toggle(o.value)}
+                className={`w-full px-3 py-1.5 text-left text-xs hover:bg-[#1A1A1A] flex items-center justify-between ${
+                  selected.includes(o.value) ? 'text-orange-400' : 'text-white'
+                }`}
+              >
+                <span>{o.label}</span>
+                <span className="flex items-center gap-2">
+                  {o.count !== undefined && (
+                    <span className="text-[10px] text-gray-500">{o.count}</span>
+                  )}
+                  {selected.includes(o.value) && <CheckCircle2 className="h-3 w-3" />}
+                </span>
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
+// Sayısal aralık input çifti
+function RangeInput({
+  minVal, maxVal, onMinChange, onMaxChange, placeholder = { min: 'Min', max: 'Max' }, suffix
+}: {
+  minVal: string
+  maxVal: string
+  onMinChange: (v: string) => void
+  onMaxChange: (v: string) => void
+  placeholder?: { min: string; max: string }
+  suffix?: string
+}) {
+  return (
+    <div className="flex items-center gap-1.5">
+      <input
+        type="number"
+        value={minVal}
+        onChange={e => onMinChange(e.target.value)}
+        placeholder={placeholder.min}
+        className="w-full px-2.5 py-1.5 bg-[#0F0F0F] border border-[#2A2A2A] rounded-md text-xs text-white placeholder-gray-600"
+      />
+      <span className="text-gray-500 text-xs">—</span>
+      <input
+        type="number"
+        value={maxVal}
+        onChange={e => onMaxChange(e.target.value)}
+        placeholder={placeholder.max}
+        className="w-full px-2.5 py-1.5 bg-[#0F0F0F] border border-[#2A2A2A] rounded-md text-xs text-white placeholder-gray-600"
+      />
+      {suffix && <span className="text-gray-500 text-xs whitespace-nowrap">{suffix}</span>}
+    </div>
+  )
+}
+
+// Yıldız seçici
+function StarPicker({ value, onChange }: { value: number; onChange: (v: number) => void }) {
+  const [hover, setHover] = useState(0)
+  return (
+    <div className="flex items-center gap-0.5">
+      {[1, 2, 3, 4, 5].map(n => (
+        <button
+          key={n}
+          type="button"
+          onMouseEnter={() => setHover(n)}
+          onMouseLeave={() => setHover(0)}
+          onClick={() => onChange(value === n ? 0 : n)}
+          className="p-0.5"
+        >
+          <Star
+            className={`h-4 w-4 transition-colors ${
+              (hover || value) >= n
+                ? 'fill-orange-500 text-orange-500'
+                : 'text-gray-600 hover:text-gray-400'
+            }`}
+          />
+        </button>
+      ))}
+      {value > 0 && (
+        <span className="ml-2 text-xs text-orange-400">
+          {value}+ yıldız
+        </span>
+      )}
+    </div>
+  )
+}
+
 export function AlertManager({ open, onClose, currentFilters }: AlertManagerProps) {
   const { data: session } = useSession()
   const [alerts, setAlerts] = useState<SavedAlert[]>([])
@@ -65,6 +242,57 @@ export function AlertManager({ open, onClose, currentFilters }: AlertManagerProp
   const [pushConnecting, setPushConnecting] = useState(false)
   const [telegramLink, setTelegramLink] = useState<string | null>(null)
   const [testingChannel, setTestingChannel] = useState<Channel | null>(null)
+  const [showAdvanced, setShowAdvanced] = useState(false)
+
+  // Cascade data
+  const [makes, setMakes] = useState<{ make: string; count: number }[]>([])
+  const [models, setModels] = useState<{ model: string; count: number }[]>([])
+  const [districts, setDistricts] = useState<{ district: string; count: number }[]>([])
+
+  // Filtre state (kullanıcı girişi)
+  const [filterState, setFilterState] = useState<{
+    make: string[]
+    model: string[]
+    trim: string
+    yearMin: string
+    yearMax: string
+    priceMin: string
+    priceMax: string
+    mileageMin: string
+    mileageMax: string
+    fuelType: string[]
+    transmission: string[]
+    bodyType: string[]
+    color: string[]
+    colorExclude: string[]
+    city: string[]
+    district: string[]
+    sellerType: string[]
+    accidentStatus: string[]
+    dealScoreMin: number
+    dealTag: string[]
+  }>({
+    make: [],
+    model: [],
+    trim: '',
+    yearMin: '',
+    yearMax: '',
+    priceMin: '',
+    priceMax: '',
+    mileageMin: '',
+    mileageMax: '',
+    fuelType: [],
+    transmission: [],
+    bodyType: [],
+    color: [],
+    colorExclude: [],
+    city: [],
+    district: [],
+    sellerType: [],
+    accidentStatus: [],
+    dealScoreMin: 0,
+    dealTag: [],
+  })
 
   const showToast = (msg: string) => {
     setToast(msg)
@@ -85,9 +313,66 @@ export function AlertManager({ open, onClose, currentFilters }: AlertManagerProp
     setLoading(false)
   }, [session])
 
+  const fetchMakes = useCallback(async () => {
+    try {
+      const res = await fetch('/api/vehicles/makes')
+      if (res.ok) {
+        const data = await res.json()
+        setMakes(data.makes || [])
+      }
+    } catch {}
+  }, [])
+
+  const fetchModels = useCallback(async (make: string) => {
+    if (!make) {
+      setModels([])
+      return
+    }
+    try {
+      const res = await fetch(`/api/vehicles/models?make=${encodeURIComponent(make)}`)
+      if (res.ok) {
+        const data = await res.json()
+        setModels(data.models || [])
+      }
+    } catch {}
+  }, [])
+
+  const fetchDistricts = useCallback(async (city: string) => {
+    if (!city) {
+      setDistricts([])
+      return
+    }
+    try {
+      const res = await fetch(`/api/vehicles/districts?city=${encodeURIComponent(city)}`)
+      if (res.ok) {
+        const data = await res.json()
+        setDistricts(data.districts || [])
+      }
+    } catch {}
+  }, [])
+
+  // Modal açılınca ilk yükleme
   useEffect(() => {
     if (open) {
       fetchAlerts()
+      fetchMakes()
+      // Mevcut filtrelerden state'i başlat
+      setFilterState(prev => ({
+        ...prev,
+        make: currentFilters.make ? [currentFilters.make] : [],
+        model: currentFilters.model ? [currentFilters.model] : [],
+        yearMin: currentFilters.yearMin ? String(currentFilters.yearMin) : '',
+        yearMax: currentFilters.yearMax ? String(currentFilters.yearMax) : '',
+        priceMin: currentFilters.priceMin ? String(currentFilters.priceMin) : '',
+        priceMax: currentFilters.priceMax ? String(currentFilters.priceMax) : '',
+        mileageMax: currentFilters.mileageMax ? String(currentFilters.mileageMax) : '',
+        fuelType: currentFilters.fuelType ? [currentFilters.fuelType] : [],
+        transmission: currentFilters.transmission ? [currentFilters.transmission] : [],
+        bodyType: currentFilters.bodyType ? [currentFilters.bodyType] : [],
+        city: currentFilters.city ? [currentFilters.city] : [],
+        sellerType: currentFilters.sellerType ? [currentFilters.sellerType] : [],
+        dealTag: currentFilters.dealTag ? (Array.isArray(currentFilters.dealTag) ? currentFilters.dealTag : [currentFilters.dealTag]) : [],
+      }))
       // Mevcut filtrelerden otomatik isim oluştur
       const parts: string[] = []
       if (currentFilters.make) parts.push(currentFilters.make)
@@ -97,21 +382,47 @@ export function AlertManager({ open, onClose, currentFilters }: AlertManagerProp
       if (currentFilters.city) parts.push(currentFilters.city)
       if (currentFilters.fuelType) parts.push(currentFilters.fuelType)
       setAlertName(parts.length > 0 ? parts.join(' ') : 'Tüm İlanlar')
-      // Default kanallar — sadece uygun olanları seç
+
+      // Default kanallar
       const defaultChs: Channel[] = []
       if (channelStatus.email) defaultChs.push('email')
-      defaultChs.push('push') // push her zaman dene
+      defaultChs.push('push')
       if (channelStatus.telegram) defaultChs.push('telegram')
       if (defaultChs.length === 0) defaultChs.push('email')
       setChannels(defaultChs)
-      // Telegram link cache
+
       if (!channelStatus.telegram) {
         fetch('/api/telegram/connect').then(r => r.json()).then(d => {
           if (d.link) setTelegramLink(d.link)
         }).catch(() => {})
       }
     }
-  }, [open, fetchAlerts, currentFilters, channelStatus.telegram, channelStatus.email])
+  }, [open, fetchAlerts, fetchMakes, currentFilters, channelStatus.telegram, channelStatus.email])
+
+  // Marka değişince model listesini yenile
+  useEffect(() => {
+    if (filterState.make.length === 1) {
+      fetchModels(filterState.make[0])
+    } else {
+      setModels([])
+      // Çoklu marka seçilince model seçimini temizle
+      if (filterState.make.length > 1) {
+        setFilterState(prev => ({ ...prev, model: [] }))
+      }
+    }
+  }, [filterState.make, fetchModels])
+
+  // Şehir değişince ilçe listesini yenile
+  useEffect(() => {
+    if (filterState.city.length === 1) {
+      fetchDistricts(filterState.city[0])
+    } else {
+      setDistricts([])
+      if (filterState.city.length > 1) {
+        setFilterState(prev => ({ ...prev, district: [] }))
+      }
+    }
+  }, [filterState.city, fetchDistricts])
 
   const toggleChannel = (ch: Channel) => {
     setChannels(prev => prev.includes(ch) ? prev.filter(c => c !== ch) : [...prev, ch])
@@ -175,6 +486,54 @@ export function AlertManager({ open, onClose, currentFilters }: AlertManagerProp
     }
   }
 
+  // Filtre state'i API'ye gönderilecek formata çevir
+  const buildFiltersPayload = () => {
+    const f: any = {}
+    if (filterState.make.length) f.make = filterState.make.length === 1 ? filterState.make[0] : filterState.make
+    if (filterState.model.length) f.model = filterState.model.length === 1 ? filterState.model[0] : filterState.model
+    if (filterState.trim.trim()) f.trim = filterState.trim.trim()
+    if (filterState.yearMin) f.yearMin = Number(filterState.yearMin)
+    if (filterState.yearMax) f.yearMax = Number(filterState.yearMax)
+    if (filterState.priceMin) f.priceMin = Number(filterState.priceMin)
+    if (filterState.priceMax) f.priceMax = Number(filterState.priceMax)
+    if (filterState.mileageMin) f.mileageMin = Number(filterState.mileageMin)
+    if (filterState.mileageMax) f.mileageMax = Number(filterState.mileageMax)
+    if (filterState.fuelType.length) f.fuelType = filterState.fuelType.length === 1 ? filterState.fuelType[0] : filterState.fuelType
+    if (filterState.transmission.length) f.transmission = filterState.transmission.length === 1 ? filterState.transmission[0] : filterState.transmission
+    if (filterState.bodyType.length) f.bodyType = filterState.bodyType.length === 1 ? filterState.bodyType[0] : filterState.bodyType
+    if (filterState.color.length) f.color = filterState.color.length === 1 ? filterState.color[0] : filterState.color
+    if (filterState.colorExclude.length) f.colorExclude = filterState.colorExclude.length === 1 ? filterState.colorExclude[0] : filterState.colorExclude
+    if (filterState.city.length) f.city = filterState.city.length === 1 ? filterState.city[0] : filterState.city
+    if (filterState.district.length) f.district = filterState.district.length === 1 ? filterState.district[0] : filterState.district
+    if (filterState.sellerType.length) f.sellerType = filterState.sellerType.length === 1 ? filterState.sellerType[0] : filterState.sellerType
+    if (filterState.accidentStatus.length) f.accidentStatus = filterState.accidentStatus.length === 1 ? filterState.accidentStatus[0] : filterState.accidentStatus
+    if (filterState.dealScoreMin > 0) f.dealScoreMin = filterState.dealScoreMin
+    if (filterState.dealTag.length) f.dealTag = filterState.dealTag.length === 1 ? filterState.dealTag[0] : filterState.dealTag
+    return f
+  }
+
+  // Kaç filtre seçili?
+  const activeFilterCount = useMemo(() => {
+    let n = 0
+    if (filterState.make.length) n++
+    if (filterState.model.length) n++
+    if (filterState.trim) n++
+    if (filterState.yearMin || filterState.yearMax) n++
+    if (filterState.priceMin || filterState.priceMax) n++
+    if (filterState.mileageMin || filterState.mileageMax) n++
+    if (filterState.fuelType.length) n++
+    if (filterState.transmission.length) n++
+    if (filterState.bodyType.length) n++
+    if (filterState.color.length || filterState.colorExclude.length) n++
+    if (filterState.city.length) n++
+    if (filterState.district.length) n++
+    if (filterState.sellerType.length) n++
+    if (filterState.accidentStatus.length) n++
+    if (filterState.dealScoreMin > 0) n++
+    if (filterState.dealTag.length) n++
+    return n
+  }, [filterState])
+
   const handleSave = async () => {
     if (!alertName || alertName.length < 3) {
       setError('İsim en az 3 karakter olmalı')
@@ -184,13 +543,11 @@ export function AlertManager({ open, onClose, currentFilters }: AlertManagerProp
       setError('En az 1 bildirim kanalı seçin')
       return
     }
-    // Push seçili ama izin/kayıt yoksa uyar
     if (channels.includes('push') && !channelStatus.push?.subscribed) {
       const proceed = confirm('Push bildirimi seçtiniz ama tarayıcı kaydınız yok. Şimdi etkinleştirmek ister misiniz? (İptal ederseniz sadece email/telegram ile bildirim gelecek)')
       if (proceed) {
         await handleEnablePush()
       } else {
-        // push'u kaldır
         setChannels(prev => prev.filter(c => c !== 'push'))
         return
       }
@@ -204,12 +561,14 @@ export function AlertManager({ open, onClose, currentFilters }: AlertManagerProp
     setError(null)
 
     try {
+      const filtersPayload = buildFiltersPayload()
+
       const res = await fetch('/api/alerts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: alertName,
-          filters: currentFilters,
+          filters: filtersPayload,
           channels,
         }),
       })
@@ -242,13 +601,21 @@ export function AlertManager({ open, onClose, currentFilters }: AlertManagerProp
     try {
       const f = JSON.parse(filtersStr)
       const parts: string[] = []
-      if (f.make) parts.push(f.make)
-      if (f.model) parts.push(f.model)
-      if (f.yearMin) parts.push(`${f.yearMin}+`)
-      if (f.yearMax) parts.push(`-${f.yearMax}`)
+      if (f.make) parts.push(Array.isArray(f.make) ? f.make.join('/') : f.make)
+      if (f.model) parts.push(Array.isArray(f.model) ? f.model.join('/') : f.model)
+      if (f.trim) parts.push(f.trim)
+      if (f.yearMin || f.yearMax) {
+        parts.push(`${f.yearMin || ''}-${f.yearMax || ''}`.replace(/^-/, '<').replace(/-$/, '+'))
+      }
       if (f.priceMax) parts.push(`${Number(f.priceMax).toLocaleString('tr-TR')} TL`)
-      if (f.fuelType) parts.push(f.fuelType)
-      if (f.city) parts.push(f.city)
+      if (f.mileageMax) parts.push(`${f.mileageMax} km`)
+      if (f.fuelType) parts.push(Array.isArray(f.fuelType) ? f.fuelType.join('/') : f.fuelType)
+      if (f.transmission) parts.push(Array.isArray(f.transmission) ? f.transmission.join('/') : f.transmission)
+      if (f.color) parts.push(Array.isArray(f.color) ? f.color.join('/') : f.color)
+      if (f.city) parts.push(Array.isArray(f.city) ? f.city.join('/') : f.city)
+      if (f.district) parts.push(Array.isArray(f.district) ? f.district.join('/') : f.district)
+      if (f.accidentStatus) parts.push(Array.isArray(f.accidentStatus) ? f.accidentStatus.join('/') : f.accidentStatus)
+      if (f.dealScoreMin) parts.push(`${f.dealScoreMin}★+`)
       return parts.length > 0 ? parts.join(' • ') : 'Tüm ilanlar'
     } catch {
       return 'Filtre bilgisi'
@@ -257,33 +624,39 @@ export function AlertManager({ open, onClose, currentFilters }: AlertManagerProp
 
   const parseAlertChannels = (a: SavedAlert): Channel[] => {
     if (a.channels) {
-      // JSON array dene
       try {
         const parsed = JSON.parse(a.channels)
         if (Array.isArray(parsed) && parsed.length > 0) return parsed
       } catch {
-        // comma-separated dene
         const parts = a.channels.split(',').map(s => s.trim()).filter(Boolean)
         if (parts.length > 0) return parts as Channel[]
       }
     }
-    // Backward compat
     const r: Channel[] = []
     if (a.notifyEmail) r.push('email')
     if (a.notifyPush) r.push('push')
     return r
   }
 
+  // Renk seçenekleri: DB'den yüklenenleri + FILTER_OPTIONS'ı birleştir
+  const colorOptions = useMemo(() => {
+    return FILTER_OPTIONS.renk.map(c => ({ value: c, label: c }))
+  }, [])
+
+  const updateFilter = <K extends keyof typeof filterState>(key: K, value: (typeof filterState)[K]) => {
+    setFilterState(prev => ({ ...prev, [key]: value }))
+  }
+
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <BellRing className="h-5 w-5 text-orange-600" />
             Arama Alarmı Kur
           </DialogTitle>
           <DialogDescription>
-            Bu kriterlere uyan yeni ilan geldiğinde email, push veya Telegram ile bildirim alacaksınız.
+            Detaylı filtreler tanımla — istediğin marka, model, renk, kazalı durumu ve daha fazlası. Eşleşen yeni ilan gelince bildirim alırsın.
           </DialogDescription>
         </DialogHeader>
 
@@ -309,23 +682,238 @@ export function AlertManager({ open, onClose, currentFilters }: AlertManagerProp
                 <Input
                   value={alertName}
                   onChange={(e) => setAlertName(e.target.value)}
-                  placeholder="örn: BMW 320i İstanbul 2020+"
+                  placeholder="örn: BMW 320i İstanbul Kazasız 2020+"
                   className="bg-[#0F0F0F]"
                 />
               </div>
 
-              {/* Mevcut filtre özeti */}
-              <div className="flex flex-wrap gap-1.5">
-                {currentFilters.make && <Badge variant="secondary">{currentFilters.make}</Badge>}
-                {currentFilters.model && <Badge variant="secondary">{currentFilters.model}</Badge>}
-                {currentFilters.yearMin && <Badge variant="secondary">{currentFilters.yearMin}+</Badge>}
-                {currentFilters.priceMax && <Badge variant="secondary">≤{currentFilters.priceMax.toLocaleString('tr-TR')} TL</Badge>}
-                {currentFilters.fuelType && <Badge variant="secondary">{currentFilters.fuelType}</Badge>}
-                {currentFilters.city && <Badge variant="secondary">{currentFilters.city}</Badge>}
+              {/* ── FİLTRELER ─────────────────────────────────────────── */}
+              <div className="space-y-3 pt-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+                    <Filter className="h-3.5 w-3.5" />
+                    Filtreler {activeFilterCount > 0 && (
+                      <Badge variant="secondary" className="text-[10px] h-4">{activeFilterCount}</Badge>
+                    )}
+                  </label>
+                  <button
+                    onClick={() => setShowAdvanced(!showAdvanced)}
+                    className="text-xs text-orange-500 hover:text-orange-400"
+                  >
+                    {showAdvanced ? '↑ Gizle' : '↓ Tüm filtreler'}
+                  </button>
+                </div>
+
+                {/* Marka + Model — her zaman görünür */}
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-[10px] font-medium text-muted-foreground mb-1 block uppercase tracking-wide">Marka</label>
+                    <MultiSelectChips
+                      options={makes.map(m => ({ value: m.make, label: m.make, count: m.count }))}
+                      selected={filterState.make}
+                      onChange={v => updateFilter('make', v)}
+                      placeholder="Marka seç (1+)"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-medium text-muted-foreground mb-1 block uppercase tracking-wide">
+                      Model {filterState.make.length === 1 ? `(${models.length})` : filterState.make.length > 1 ? '(tek marka seç)' : ''}
+                    </label>
+                    <MultiSelectChips
+                      options={filterState.make.length === 1 ? models.map(m => ({ value: m.model, label: m.model, count: m.count })) : []}
+                      selected={filterState.model}
+                      onChange={v => updateFilter('model', v)}
+                      placeholder={filterState.make.length === 1 ? 'Model seç' : 'Önce marka seç'}
+                    />
+                  </div>
+                </div>
+
+                {/* Yıl + Fiyat — her zaman görünür */}
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-[10px] font-medium text-muted-foreground mb-1 block uppercase tracking-wide">Yıl</label>
+                    <RangeInput
+                      minVal={filterState.yearMin}
+                      maxVal={filterState.yearMax}
+                      onMinChange={v => updateFilter('yearMin', v)}
+                      onMaxChange={v => updateFilter('yearMax', v)}
+                      placeholder={{ min: 'Min yıl', max: 'Max yıl' }}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-medium text-muted-foreground mb-1 block uppercase tracking-wide">Fiyat (₺)</label>
+                    <RangeInput
+                      minVal={filterState.priceMin}
+                      maxVal={filterState.priceMax}
+                      onMinChange={v => updateFilter('priceMin', v)}
+                      onMaxChange={v => updateFilter('priceMax', v)}
+                      placeholder={{ min: 'Min ₺', max: 'Max ₺' }}
+                    />
+                  </div>
+                </div>
+
+                {/* ── GELİŞMİŞ FİLTRELER ─────────────────────────────── */}
+                <AnimatePresence>
+                  {showAdvanced && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: 'auto', opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      className="space-y-3 overflow-hidden"
+                    >
+                      {/* KM aralığı */}
+                      <div>
+                        <label className="text-[10px] font-medium text-muted-foreground mb-1 block uppercase tracking-wide">KM Aralığı</label>
+                        <RangeInput
+                          minVal={filterState.mileageMin}
+                          maxVal={filterState.mileageMax}
+                          onMinChange={v => updateFilter('mileageMin', v)}
+                          onMaxChange={v => updateFilter('mileageMax', v)}
+                          placeholder={{ min: 'Min km', max: 'Max km' }}
+                          suffix="km"
+                        />
+                      </div>
+
+                      {/* Yakıt + Vites */}
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="text-[10px] font-medium text-muted-foreground mb-1 block uppercase tracking-wide">Yakıt</label>
+                          <MultiSelectChips
+                            options={FILTER_OPTIONS.yakit.map(v => ({ value: v, label: v }))}
+                            selected={filterState.fuelType}
+                            onChange={v => updateFilter('fuelType', v)}
+                            placeholder="Yakıt seç"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-medium text-muted-foreground mb-1 block uppercase tracking-wide">Vites</label>
+                          <MultiSelectChips
+                            options={FILTER_OPTIONS.vites.map(v => ({ value: v, label: v }))}
+                            selected={filterState.transmission}
+                            onChange={v => updateFilter('transmission', v)}
+                            placeholder="Vites seç"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Kasa + Renk */}
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="text-[10px] font-medium text-muted-foreground mb-1 block uppercase tracking-wide">Kasa Tipi</label>
+                          <MultiSelectChips
+                            options={FILTER_OPTIONS.kasa.map(v => ({ value: v, label: v }))}
+                            selected={filterState.bodyType}
+                            onChange={v => updateFilter('bodyType', v)}
+                            placeholder="Kasa seç"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-medium text-muted-foreground mb-1 block uppercase tracking-wide">Renk</label>
+                          <MultiSelectChips
+                            options={colorOptions}
+                            selected={filterState.color}
+                            onChange={v => updateFilter('color', v)}
+                            placeholder="Renk seç"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Renk hariç tutma */}
+                      {filterState.colorExclude.length > 0 || showAdvanced ? (
+                        <div>
+                          <label className="text-[10px] font-medium text-muted-foreground mb-1 block uppercase tracking-wide">Renk Hariç Tut</label>
+                          <MultiSelectChips
+                            options={colorOptions}
+                            selected={filterState.colorExclude}
+                            onChange={v => updateFilter('colorExclude', v)}
+                            placeholder="Bu renkler olmasın"
+                          />
+                        </div>
+                      ) : null}
+
+                      {/* Şehir + İlçe */}
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="text-[10px] font-medium text-muted-foreground mb-1 block uppercase tracking-wide">Şehir</label>
+                          <MultiSelectChips
+                            options={FILTER_OPTIONS.sehir.map(v => ({ value: v, label: v }))}
+                            selected={filterState.city}
+                            onChange={v => updateFilter('city', v)}
+                            placeholder="Şehir seç"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-medium text-muted-foreground mb-1 block uppercase tracking-wide">
+                            İlçe {filterState.city.length === 1 ? `(${districts.length})` : filterState.city.length > 1 ? '(tek şehir seç)' : ''}
+                          </label>
+                          <MultiSelectChips
+                            options={filterState.city.length === 1 ? districts.map(d => ({ value: d.district, label: d.district, count: d.count })) : []}
+                            selected={filterState.district}
+                            onChange={v => updateFilter('district', v)}
+                            placeholder={filterState.city.length === 1 ? 'İlçe seç' : 'Önce şehir seç'}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Satıcı tipi + Kazalı durumu */}
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="text-[10px] font-medium text-muted-foreground mb-1 block uppercase tracking-wide">Satıcı Tipi</label>
+                          <MultiSelectChips
+                            options={FILTER_OPTIONS.satici.map(v => ({ value: v, label: v }))}
+                            selected={filterState.sellerType}
+                            onChange={v => updateFilter('sellerType', v)}
+                            placeholder="Satıcı seç"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-medium text-muted-foreground mb-1 block uppercase tracking-wide">Kazalı Durumu</label>
+                          <MultiSelectChips
+                            options={FILTER_OPTIONS.kazali.map(v => ({ value: v.value, label: v.label }))}
+                            selected={filterState.accidentStatus}
+                            onChange={v => updateFilter('accidentStatus', v)}
+                            placeholder="Kazalı durumu seç"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Trim */}
+                      <div>
+                        <label className="text-[10px] font-medium text-muted-foreground mb-1 block uppercase tracking-wide">Trim / Motor Detayı (içeren)</label>
+                        <Input
+                          value={filterState.trim}
+                          onChange={e => updateFilter('trim', e.target.value)}
+                          placeholder="örn: 320i M Sport, 1.5 TDI, Plug-in"
+                          className="bg-[#0F0F0F] text-sm"
+                        />
+                      </div>
+
+                      {/* DealScore min yıldız */}
+                      <div>
+                        <label className="text-[10px] font-medium text-muted-foreground mb-1 block uppercase tracking-wide">Minimum DealScore (Fırsat Puanı)</label>
+                        <StarPicker
+                          value={filterState.dealScoreMin}
+                          onChange={v => updateFilter('dealScoreMin', v)}
+                        />
+                      </div>
+
+                      {/* Fırsat etiketi */}
+                      <div>
+                        <label className="text-[10px] font-medium text-muted-foreground mb-1 block uppercase tracking-wide">Fırsat Etiketi</label>
+                        <MultiSelectChips
+                          options={FILTER_OPTIONS.firsat.map(v => ({ value: v, label: v }))}
+                          selected={filterState.dealTag}
+                          onChange={v => updateFilter('dealTag', v)}
+                          placeholder="Fırsat etiketi seç"
+                        />
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
 
-              {/* Bildirim kanalları */}
-              <div className="space-y-2">
+              {/* ── BİLDİRİM KANALLARI ───────────────────────────────── */}
+              <div className="space-y-2 pt-2 border-t border-[#2A2A2A]">
                 <label className="text-xs font-medium text-muted-foreground">Bildirim Kanalları</label>
                 {(['email', 'push', 'telegram'] as Channel[]).map((ch) => {
                   const meta = CHANNEL_META[ch]
@@ -366,7 +954,6 @@ export function AlertManager({ open, onClose, currentFilters }: AlertManagerProp
                   )
                 })}
 
-                {/* Push etkinleştirme butonu */}
                 {channels.includes('push') && !channelStatus.push?.subscribed && (
                   <Button
                     variant="outline"
@@ -380,7 +967,6 @@ export function AlertManager({ open, onClose, currentFilters }: AlertManagerProp
                   </Button>
                 )}
 
-                {/* Telegram bağla butonu */}
                 {channels.includes('telegram') && !channelStatus.telegram && (
                   <Button
                     variant="outline"
@@ -394,7 +980,6 @@ export function AlertManager({ open, onClose, currentFilters }: AlertManagerProp
                   </Button>
                 )}
 
-                {/* Test butonları (sadece bağlı kanallar için) */}
                 <div className="flex gap-2 pt-1">
                   {channelStatus.push?.subscribed && (
                     <Button
@@ -433,7 +1018,7 @@ export function AlertManager({ open, onClose, currentFilters }: AlertManagerProp
                 {saving ? 'Kaydediliyor...' : (
                   <>
                     <Plus className="h-4 w-4" />
-                    Alarm Kur
+                    Alarm Kur ({activeFilterCount} filtre)
                   </>
                 )}
               </Button>

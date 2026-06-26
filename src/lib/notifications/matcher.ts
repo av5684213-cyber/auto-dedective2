@@ -1,8 +1,32 @@
-// Alert matching engine
+// Alert matching engine — v2
 // Verilen listing'leri aktif alert'lere karşı eşleştirir,
 // uygun kanallara paralel bildirim gönderir, dedupe yapar.
 //
-// Cron her gece ve /api/alerts/match (scraper secret ile) bu modülü çağırır.
+// Desteklenen filtreler (kullanıcı alarm kurarken seçebilir):
+//   1.  make (string | string[])              — tek veya çoklu marka
+//   2.  model (string | string[])             — tek veya çoklu model
+//   3.  trim (string)                         — trim detayı (içeren)
+//   4.  yearMin / yearMax (number)
+//   5.  priceMin / priceMax (number)
+//   6.  mileageMin / mileageMax (number)
+//   7.  fuelType (string | string[])          — Benzin/Dizel/LPG/Hibrit/Elektrik
+//   8.  transmission (string | string[])
+//   9.  bodyType (string | string[])          — Sedan/Hatchback/SUV/...
+//  10.  color (string | string[])             — Renk
+//  11.  colorExclude (string | string[])      — Hariç tutulan renkler
+//  12.  city (string | string[])              — Şehir
+//  13.  district (string | string[])          — İlçe
+//  14.  sellerType (string | string[])        — Galeri/Sahibinden/...
+//  15.  accidentStatus (string | string[])    — kazasiz/az_hasarli/orta_hasarli/agir_hasarli
+//  16.  dealScoreMin (number 1-5)             — minimum yıldız puanı
+//  17.  dealTag (string | string[])           — Harika Fırsat/İyi Fiyat/...
+//
+// Eşleştirme kuralları:
+//   - Tek değer: eşitlik (case-insensitive)
+//   - Çoklu değer: array'in elemanlarından herhangi birine eşitse geçer (OR mantığı)
+//   - Boş/null filtre: o kriter yok sayılır (her ilan geçer)
+//   - accidentStatus eşleşmesi: kullanıcı "kazasiz" seçerse sadece kazasiz ilanlar
+//     kullanıcı ["kazasiz", "az_hasarli"] seçerse ikisinden biri yeterli
 
 import { db } from '@/lib/db'
 import { sendAlertEmail } from './email'
@@ -13,70 +37,176 @@ interface ListingLike {
   id: string
   make: string
   model: string
+  trim?: string | null
   year: number
   price: number
   mileageKm?: number | null
   fuelType?: string | null
   transmission?: string | null
   bodyType?: string | null
+  color?: string | null
   city?: string | null
+  district?: string | null
   sellerType?: string | null
+  accidentStatus?: string | null
   dealTag?: string | null
+  dealScore?: number | null
   imageUrl?: string | null
   sourceUrl: string
   firstSeenAt?: Date
 }
 
+type MultiValue = string | string[] | undefined
+
 interface SearchFilters {
-  make?: string
-  model?: string
+  make?: MultiValue
+  model?: MultiValue
+  trim?: string
   yearMin?: number
   yearMax?: number
   priceMin?: number
   priceMax?: number
+  mileageMin?: number
   mileageMax?: number
-  fuelType?: string
-  transmission?: string
-  bodyType?: string
-  city?: string
-  sellerType?: string
-  dealTag?: string[] | string
+  fuelType?: MultiValue
+  transmission?: MultiValue
+  bodyType?: MultiValue
+  color?: MultiValue
+  colorExclude?: MultiValue
+  city?: MultiValue
+  district?: MultiValue
+  sellerType?: MultiValue
+  accidentStatus?: MultiValue
+  dealScoreMin?: number
+  dealTag?: MultiValue
+}
+
+/**
+ * Tek değer veya array olarak gelen filtreyi normalize eder.
+ * Dönüş: string[] (boşsa [])
+ */
+function toArray(v: MultiValue): string[] {
+  if (!v) return []
+  if (Array.isArray(v)) return v.map(s => String(s).trim().toLowerCase()).filter(Boolean)
+  return [String(v).trim().toLowerCase()]
+}
+
+/**
+ * Listing'in alanı, verilen filter array'inden herhangi birine eşit mi? (OR)
+ * Boş array → filtre yok → true döner.
+ * Büyük/küçük harf duyarsız.
+ */
+function matchesOneOf(listingValue: string | null | undefined, filterValue: MultiValue): boolean {
+  const arr = toArray(filterValue)
+  if (arr.length === 0) return true // filtre yok
+  if (!listingValue) return false // listing'te değer yok ama filter var
+  const lv = listingValue.toLowerCase()
+  return arr.includes(lv)
+}
+
+/**
+ * Listing'in alanı, verilen filter array'inden hiçbirine eşit değil mi? (NOT IN)
+ * Boş array → hariç tutma yok → true döner.
+ */
+function matchesNoneOf(listingValue: string | null | undefined, filterValue: MultiValue): boolean {
+  const arr = toArray(filterValue)
+  if (arr.length === 0) return true // hariç tutma yok
+  if (!listingValue) return true // listing'te değer yok, hariç tutmaya gerek yok
+  const lv = listingValue.toLowerCase()
+  return !arr.includes(lv)
+}
+
+/**
+ * String contains (case-insensitive). Trim ve model detayı için kullanılır.
+ */
+function containsText(listingValue: string | null | undefined, filterValue: string | undefined): boolean {
+  if (!filterValue) return true
+  if (!listingValue) return false
+  return listingValue.toLowerCase().includes(filterValue.toLowerCase())
 }
 
 function matchesFilters(listing: ListingLike, filters: SearchFilters): boolean {
-  if (filters.make && listing.make.toLowerCase() !== filters.make.toLowerCase()) return false
-  if (filters.model && !listing.model.toLowerCase().includes(filters.model.toLowerCase())) return false
+  // 1. Marka (tek veya çoklu)
+  if (!matchesOneOf(listing.make, filters.make)) return false
+
+  // 2. Model (tek veya çoklu — exact match)
+  if (!matchesOneOf(listing.model, filters.model)) return false
+
+  // 3. Trim (contains)
+  if (!containsText(listing.trim, filters.trim)) return false
+
+  // 4. Yıl aralığı
   if (filters.yearMin && listing.year < filters.yearMin) return false
   if (filters.yearMax && listing.year > filters.yearMax) return false
+
+  // 5. Fiyat aralığı
   if (filters.priceMin && listing.price < filters.priceMin) return false
   if (filters.priceMax && listing.price > filters.priceMax) return false
-  if (filters.mileageMax && (listing.mileageKm ?? 0) > filters.mileageMax) return false
-  if (filters.fuelType && listing.fuelType !== filters.fuelType) return false
-  if (filters.transmission && listing.transmission !== filters.transmission) return false
-  if (filters.bodyType && listing.bodyType !== filters.bodyType) return false
-  if (filters.city && listing.city !== filters.city) return false
-  if (filters.sellerType && listing.sellerType !== filters.sellerType) return false
-  if (filters.dealTag) {
-    const tags = Array.isArray(filters.dealTag) ? filters.dealTag : [filters.dealTag]
-    if (!listing.dealTag || !tags.includes(listing.dealTag)) return false
+
+  // 6. KM aralığı
+  const km = listing.mileageKm ?? 0
+  if (filters.mileageMin && km < filters.mileageMin) return false
+  if (filters.mileageMax && km > filters.mileageMax) return false
+
+  // 7. Yakıt
+  if (!matchesOneOf(listing.fuelType, filters.fuelType)) return false
+
+  // 8. Vites
+  if (!matchesOneOf(listing.transmission, filters.transmission)) return false
+
+  // 9. Kasa tipi
+  if (!matchesOneOf(listing.bodyType, filters.bodyType)) return false
+
+  // 10. Renk (contains — "Beyaz" filtresi "Beyaz" ve "Beyaz/Siyah" ikisini de yakalar)
+  if (filters.color) {
+    const arr = toArray(filters.color)
+    if (arr.length > 0) {
+      if (!listing.color) return false
+      const lv = listing.color.toLowerCase()
+      const matched = arr.some(c => lv.includes(c))
+      if (!matched) return false
+    }
   }
+
+  // 11. Renk hariç tutma
+  if (!matchesNoneOf(listing.color, filters.colorExclude)) return false
+
+  // 12. Şehir
+  if (!matchesOneOf(listing.city, filters.city)) return false
+
+  // 13. İlçe
+  if (!matchesOneOf(listing.district, filters.district)) return false
+
+  // 14. Satıcı tipi
+  if (!matchesOneOf(listing.sellerType, filters.sellerType)) return false
+
+  // 15. Kazalı durumu
+  if (!matchesOneOf(listing.accidentStatus, filters.accidentStatus)) return false
+
+  // 16. DealScore minimum (1-5 yıldız)
+  // dealScore DB'de 0-100 arası float, 5 yıldıza normalize: score/20
+  if (filters.dealScoreMin && filters.dealScoreMin > 0) {
+    if (!listing.dealScore) return false
+    const stars = listing.dealScore / 20
+    if (stars < filters.dealScoreMin) return false
+  }
+
+  // 17. Fırsat etiketi
+  if (!matchesOneOf(listing.dealTag, filters.dealTag)) return false
+
   return true
 }
 
 function parseChannels(channels: string, notifyEmail: boolean, notifyPush: boolean): string[] {
-  // Yeni 'channels' alanı: önce JSON array dene, olmazsa comma-separated dene
   if (channels) {
-    // JSON array dene
     try {
       const parsed = JSON.parse(channels)
       if (Array.isArray(parsed) && parsed.length > 0) return parsed
     } catch {
-      // JSON değil — comma-separated dene
       const commaParsed = channels.split(',').map(s => s.trim()).filter(Boolean)
       if (commaParsed.length > 0) return commaParsed
     }
   }
-  // Backward compat: notifyEmail/notifyPush'tan türet
   const result: string[] = []
   if (notifyEmail) result.push('email')
   if (notifyPush) result.push('push')
@@ -93,14 +223,6 @@ export interface MatchResult {
   errors: string[]
 }
 
-/**
- * Aktif alert'leri verilen ilan listesine karşı eşleştir ve bildirim gönder.
- * Hem cron hem /api/alerts/match kullanır.
- *
- * @param listings Eşleştirilecek ilan listesi
- * @param opts.sinceAlertId Sadece belirli bir alert'i test et (test amaçlı)
- * @param opts.dryRun Bildirim gönderme, sadece eşleşmeleri say
- */
 export async function runAlertMatching(
   listings: ListingLike[],
   opts: { dryRun?: boolean } = {}
@@ -117,7 +239,6 @@ export async function runAlertMatching(
 
   if (!listings.length) return result
 
-  // Tüm aktif alert'leri çek (user + push subs + telegram conn ile)
   const alerts = await db.savedSearch.findMany({
     where: { isActive: true },
     include: {
@@ -129,7 +250,6 @@ export async function runAlertMatching(
   result.totalAlerts = alerts.length
   if (!alerts.length) return result
 
-  // Telegram bağlantılarını topluca çek
   const userIds = alerts.map(a => a.userId)
   const [telegramConns, pushSubs] = await Promise.all([
     db.telegramConnection.findMany({ where: { userId: { in: userIds } } }),
@@ -142,7 +262,6 @@ export async function runAlertMatching(
     pushByUserId.get(p.userId)!.push(p)
   }
 
-  // Önce dedupe — hangi (alertId, listingId) çiftleri zaten gönderilmiş?
   const listingIds = listings.map(l => l.id)
   const alreadyNotified = await db.alertNotification.findMany({
     where: {
@@ -173,7 +292,6 @@ export async function runAlertMatching(
 
       const tasks: Promise<void>[] = []
 
-      // EMAIL
       if (channels.includes('email') && alert.user?.email) {
         tasks.push((async () => {
           const r = await sendAlertEmail({
@@ -202,7 +320,6 @@ export async function runAlertMatching(
         })())
       }
 
-      // PUSH (kullanıcının tüm cihazlarına)
       if (channels.includes('push')) {
         const userSubs = pushByUserId.get(alert.userId) || []
         for (const sub of userSubs) {
@@ -229,7 +346,6 @@ export async function runAlertMatching(
         }
       }
 
-      // TELEGRAM
       if (channels.includes('telegram')) {
         const tg = telegramByUserId.get(alert.userId)
         if (tg) {
@@ -265,15 +381,12 @@ export async function runAlertMatching(
         await Promise.allSettled(tasks)
       }
 
-      // Eşleşme oldu mu? Bildirim gönderilemese bile (env yok) dedupe kaydı at
-      // Bu sayede env'ler eklenince aynı ilan tekrar bildirim oluşturmaz
       if (!opts.dryRun) {
         try {
           await db.alertNotification.create({
             data: {
               alertId: alert.id,
               listingId: listing.id,
-              // Hangi kanallar DAHİL edilmeye çalışıldı (hepsini kaydet — env yoksa bile niyet kaydı)
               channels: JSON.stringify(channels),
             },
           })
@@ -285,7 +398,6 @@ export async function runAlertMatching(
             },
           })
         } catch (e: any) {
-          // unique constraint ihlali → zaten gönderilmiş, sorun değil
           if (!String(e?.message || '').includes('Unique constraint')) {
             result.errors.push(`dedupe insert: ${e?.message}`)
           }
@@ -294,7 +406,6 @@ export async function runAlertMatching(
     }
   }
 
-  // Süresi dolmuş push subscription'ları sil
   if (expiredPushEndpoints.length > 0) {
     try {
       await db.pushSubscription.deleteMany({
@@ -309,9 +420,6 @@ export async function runAlertMatching(
   return result
 }
 
-/**
- * Cron için: son X saatte eklenen tüm ilanları al, match çalıştır.
- */
 export async function runCronAlertMatching(opts: { sinceHours?: number } = {}): Promise<MatchResult> {
   const sinceHours = opts.sinceHours ?? 24
   const since = new Date(Date.now() - sinceHours * 60 * 60 * 1000)
@@ -325,22 +433,32 @@ export async function runCronAlertMatching(opts: { sinceHours?: number } = {}): 
       id: true,
       make: true,
       model: true,
+      trim: true,
       year: true,
       price: true,
       mileageKm: true,
       fuelType: true,
       transmission: true,
       bodyType: true,
+      color: true,
       city: true,
+      district: true,
       sellerType: true,
+      accidentStatus: true,
       dealTag: true,
+      dealScore: true,
       imageUrl: true,
       sourceUrl: true,
       firstSeenAt: true,
     },
-    take: 500, // batch limit — fazla yüklenmesin
+    take: 500,
   })
 
   console.log(`[alerts] Cron matching: ${recentListings.length} yeni ilan, son ${sinceHours} saatte`)
   return runAlertMatching(recentListings)
 }
+
+// FILTER_OPTIONS — ayrı dosyaya taşındı (filter-options.ts)
+// Sebep: client component'ler (AlertManager) bunu import eder,
+// matcher.ts ise web-push import ettiği için client bundle'a giremez.
+export { FILTER_OPTIONS } from './filter-options'

@@ -11,19 +11,30 @@ import { z } from 'zod';
 const createAlertSchema = z.object({
   name: z.string().min(3, 'İsim en az 3 karakter').max(100),
   filters: z.object({
-    make: z.string().optional(),
-    model: z.string().optional(),
+    // Marka/model — tek veya çoklu seçim
+    make: z.union([z.string(), z.array(z.string())]).optional(),
+    model: z.union([z.string(), z.array(z.string())]).optional(),
+    trim: z.string().optional(),
+    // Sayısal aralıklar
     yearMin: z.coerce.number().int().min(1900).max(2100).optional(),
     yearMax: z.coerce.number().int().min(1900).max(2100).optional(),
     priceMin: z.coerce.number().min(0).optional(),
     priceMax: z.coerce.number().min(0).optional(),
+    mileageMin: z.coerce.number().int().min(0).optional(),
     mileageMax: z.coerce.number().int().min(0).optional(),
-    fuelType: z.string().optional(),
-    transmission: z.string().optional(),
-    bodyType: z.string().optional(),
-    city: z.string().optional(),
-    sellerType: z.string().optional(),
+    // Kategorik — tek veya çoklu
+    fuelType: z.union([z.string(), z.array(z.string())]).optional(),
+    transmission: z.union([z.string(), z.array(z.string())]).optional(),
+    bodyType: z.union([z.string(), z.array(z.string())]).optional(),
+    color: z.union([z.string(), z.array(z.string())]).optional(),
+    colorExclude: z.union([z.string(), z.array(z.string())]).optional(),
+    city: z.union([z.string(), z.array(z.string())]).optional(),
+    district: z.union([z.string(), z.array(z.string())]).optional(),
+    sellerType: z.union([z.string(), z.array(z.string())]).optional(),
+    accidentStatus: z.union([z.string(), z.array(z.string())]).optional(),
     dealTag: z.union([z.string(), z.array(z.string())]).optional(),
+    // Skor
+    dealScoreMin: z.coerce.number().min(0).max(5).optional(),
   }),
   // Yeni: çoklu kanal seçimi
   channels: z.array(z.enum(['email', 'push', 'telegram'])).min(1, 'En az 1 kanal seçin').default(['email', 'push']),
