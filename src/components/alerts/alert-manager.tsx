@@ -248,6 +248,10 @@ export function AlertManager({ open, onClose, currentFilters }: AlertManagerProp
   const [makes, setMakes] = useState<{ make: string; count: number }[]>([])
   const [models, setModels] = useState<{ model: string; count: number }[]>([])
   const [districts, setDistricts] = useState<{ district: string; count: number }[]>([])
+  const [trims, setTrims] = useState<{ trim: string; count: number }[]>([])
+  const [bodyTypes, setBodyTypes] = useState<{ bodyType: string; count: number }[]>([])
+  const [transmissions, setTransmissions] = useState<{ transmission: string; count: number }[]>([])
+  const [fuelTypes, setFuelTypes] = useState<{ fuelType: string; count: number }[]>([])
 
   // Filtre state (kullanıcı girişi)
   const [filterState, setFilterState] = useState<{
@@ -351,11 +355,58 @@ export function AlertManager({ open, onClose, currentFilters }: AlertManagerProp
     } catch {}
   }, [])
 
+  const fetchTrims = useCallback(async (make: string, model: string) => {
+    if (!make || !model) {
+      setTrims([])
+      return
+    }
+    try {
+      const res = await fetch(`/api/vehicles/trims?make=${encodeURIComponent(make)}&model=${encodeURIComponent(model)}`)
+      if (res.ok) {
+        const data = await res.json()
+        setTrims(data.trims || [])
+      }
+    } catch {}
+  }, [])
+
+  const fetchBodyTypes = useCallback(async () => {
+    try {
+      const res = await fetch('/api/vehicles/body-types')
+      if (res.ok) {
+        const data = await res.json()
+        setBodyTypes(data.bodyTypes || [])
+      }
+    } catch {}
+  }, [])
+
+  const fetchTransmissions = useCallback(async () => {
+    try {
+      const res = await fetch('/api/vehicles/transmissions')
+      if (res.ok) {
+        const data = await res.json()
+        setTransmissions(data.transmissions || [])
+      }
+    } catch {}
+  }, [])
+
+  const fetchFuelTypes = useCallback(async () => {
+    try {
+      const res = await fetch('/api/vehicles/fuel-types')
+      if (res.ok) {
+        const data = await res.json()
+        setFuelTypes(data.fuelTypes || [])
+      }
+    } catch {}
+  }, [])
+
   // Modal açılınca ilk yükleme
   useEffect(() => {
     if (open) {
       fetchAlerts()
       fetchMakes()
+      fetchBodyTypes()
+      fetchTransmissions()
+      fetchFuelTypes()
       // Mevcut filtrelerden state'i başlat
       setFilterState(prev => ({
         ...prev,
@@ -397,7 +448,7 @@ export function AlertManager({ open, onClose, currentFilters }: AlertManagerProp
         }).catch(() => {})
       }
     }
-  }, [open, fetchAlerts, fetchMakes, currentFilters, channelStatus.telegram, channelStatus.email])
+  }, [open, fetchAlerts, fetchMakes, fetchBodyTypes, fetchTransmissions, fetchFuelTypes, currentFilters, channelStatus.telegram, channelStatus.email])
 
   // Marka değişince model listesini yenile
   useEffect(() => {
@@ -411,6 +462,21 @@ export function AlertManager({ open, onClose, currentFilters }: AlertManagerProp
       }
     }
   }, [filterState.make, fetchModels])
+
+  // Marka + Model seçilince trim listesini yenile (cascade)
+  useEffect(() => {
+    if (filterState.make.length === 1 && filterState.model.length === 1) {
+      fetchTrims(filterState.make[0], filterState.model[0])
+    } else {
+      setTrims([])
+      // Çoklu seçim olunca trim seçimini temizle
+      if (filterState.make.length > 1 || filterState.model.length > 1 || filterState.model.length === 0) {
+        if (filterState.trim) {
+          setFilterState(prev => ({ ...prev, trim: '' }))
+        }
+      }
+    }
+  }, [filterState.make, filterState.model, fetchTrims])
 
   // Şehir değişince ilçe listesini yenile
   useEffect(() => {
@@ -704,52 +770,62 @@ export function AlertManager({ open, onClose, currentFilters }: AlertManagerProp
                   </button>
                 </div>
 
-                {/* Marka + Model — her zaman görünür */}
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="text-[10px] font-medium text-muted-foreground mb-1 block uppercase tracking-wide">Marka</label>
-                    <MultiSelectChips
-                      options={makes.map(m => ({ value: m.make, label: m.make, count: m.count }))}
-                      selected={filterState.make}
-                      onChange={v => updateFilter('make', v)}
-                      placeholder="Marka seç (1+)"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-medium text-muted-foreground mb-1 block uppercase tracking-wide">
-                      Model {filterState.make.length === 1 ? `(${models.length})` : filterState.make.length > 1 ? '(tek marka seç)' : ''}
-                    </label>
-                    <MultiSelectChips
-                      options={filterState.make.length === 1 ? models.map(m => ({ value: m.model, label: m.model, count: m.count })) : []}
-                      selected={filterState.model}
-                      onChange={v => updateFilter('model', v)}
-                      placeholder={filterState.make.length === 1 ? 'Model seç' : 'Önce marka seç'}
-                    />
-                  </div>
+                {/* Marka — kendi kutusu (her zaman görünür) */}
+                <div className="p-3 rounded-lg border border-[#2A2A2A] bg-[#0F0F0F]">
+                  <label className="text-[10px] font-semibold text-orange-500 mb-2 block uppercase tracking-wide flex items-center gap-1.5">
+                    <span className="w-1 h-1 rounded-full bg-orange-500" />
+                    Marka
+                  </label>
+                  <MultiSelectChips
+                    options={makes.map(m => ({ value: m.make, label: m.make, count: m.count }))}
+                    selected={filterState.make}
+                    onChange={v => updateFilter('make', v)}
+                    placeholder="Marka seç (çoklu)"
+                  />
                 </div>
 
-                {/* Yıl + Fiyat — her zaman görünür */}
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="text-[10px] font-medium text-muted-foreground mb-1 block uppercase tracking-wide">Yıl</label>
-                    <RangeInput
-                      minVal={filterState.yearMin}
-                      maxVal={filterState.yearMax}
-                      onMinChange={v => updateFilter('yearMin', v)}
-                      onMaxChange={v => updateFilter('yearMax', v)}
-                      placeholder={{ min: 'Min yıl', max: 'Max yıl' }}
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-medium text-muted-foreground mb-1 block uppercase tracking-wide">Fiyat (₺)</label>
-                    <RangeInput
-                      minVal={filterState.priceMin}
-                      maxVal={filterState.priceMax}
-                      onMinChange={v => updateFilter('priceMin', v)}
-                      onMaxChange={v => updateFilter('priceMax', v)}
-                      placeholder={{ min: 'Min ₺', max: 'Max ₺' }}
-                    />
-                  </div>
+                {/* Model — kendi kutusu (cascade) */}
+                <div className="p-3 rounded-lg border border-[#2A2A2A] bg-[#0F0F0F]">
+                  <label className="text-[10px] font-semibold text-orange-500 mb-2 block uppercase tracking-wide flex items-center gap-1.5">
+                    <span className="w-1 h-1 rounded-full bg-orange-500" />
+                    Model {filterState.make.length === 1 ? `(${models.length})` : filterState.make.length > 1 ? '(tek marka seç)' : ''}
+                  </label>
+                  <MultiSelectChips
+                    options={filterState.make.length === 1 ? models.map(m => ({ value: m.model, label: m.model, count: m.count })) : []}
+                    selected={filterState.model}
+                    onChange={v => updateFilter('model', v)}
+                    placeholder={filterState.make.length === 1 ? 'Model seç (çoklu)' : 'Önce tek marka seç'}
+                  />
+                </div>
+
+                {/* Yıl Aralığı — kendi kutusu (her zaman görünür) */}
+                <div className="p-3 rounded-lg border border-[#2A2A2A] bg-[#0F0F0F]">
+                  <label className="text-[10px] font-semibold text-orange-500 mb-2 block uppercase tracking-wide flex items-center gap-1.5">
+                    <span className="w-1 h-1 rounded-full bg-orange-500" />
+                    Yıl Aralığı
+                  </label>
+                  <RangeInput
+                    minVal={filterState.yearMin}
+                    maxVal={filterState.yearMax}
+                    onMinChange={v => updateFilter('yearMin', v)}
+                    onMaxChange={v => updateFilter('yearMax', v)}
+                    placeholder={{ min: 'Min yıl', max: 'Max yıl' }}
+                  />
+                </div>
+
+                {/* Fiyat Aralığı — kendi kutusu (her zaman görünür) */}
+                <div className="p-3 rounded-lg border border-[#2A2A2A] bg-[#0F0F0F]">
+                  <label className="text-[10px] font-semibold text-orange-500 mb-2 block uppercase tracking-wide flex items-center gap-1.5">
+                    <span className="w-1 h-1 rounded-full bg-orange-500" />
+                    Fiyat Aralığı (₺)
+                  </label>
+                  <RangeInput
+                    minVal={filterState.priceMin}
+                    maxVal={filterState.priceMax}
+                    onMinChange={v => updateFilter('priceMin', v)}
+                    onMaxChange={v => updateFilter('priceMax', v)}
+                    placeholder={{ min: 'Min ₺', max: 'Max ₺' }}
+                  />
                 </div>
 
                 {/* ── GELİŞMİŞ FİLTRELER ─────────────────────────────── */}
@@ -761,9 +837,12 @@ export function AlertManager({ open, onClose, currentFilters }: AlertManagerProp
                       exit={{ height: 0, opacity: 0 }}
                       className="space-y-3 overflow-hidden"
                     >
-                      {/* KM aralığı */}
-                      <div>
-                        <label className="text-[10px] font-medium text-muted-foreground mb-1 block uppercase tracking-wide">KM Aralığı</label>
+                      {/* KM Aralığı — kendi kutusu */}
+                      <div className="p-3 rounded-lg border border-[#2A2A2A] bg-[#0F0F0F]">
+                        <label className="text-[10px] font-semibold text-orange-500 mb-2 block uppercase tracking-wide flex items-center gap-1.5">
+                          <span className="w-1 h-1 rounded-full bg-orange-500" />
+                          KM Aralığı
+                        </label>
                         <RangeInput
                           minVal={filterState.mileageMin}
                           maxVal={filterState.mileageMax}
@@ -774,137 +853,197 @@ export function AlertManager({ open, onClose, currentFilters }: AlertManagerProp
                         />
                       </div>
 
-                      {/* Yakıt + Vites */}
-                      <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <label className="text-[10px] font-medium text-muted-foreground mb-1 block uppercase tracking-wide">Yakıt</label>
-                          <MultiSelectChips
-                            options={FILTER_OPTIONS.yakit.map(v => ({ value: v, label: v }))}
-                            selected={filterState.fuelType}
-                            onChange={v => updateFilter('fuelType', v)}
-                            placeholder="Yakıt seç"
-                          />
-                        </div>
-                        <div>
-                          <label className="text-[10px] font-medium text-muted-foreground mb-1 block uppercase tracking-wide">Vites</label>
-                          <MultiSelectChips
-                            options={FILTER_OPTIONS.vites.map(v => ({ value: v, label: v }))}
-                            selected={filterState.transmission}
-                            onChange={v => updateFilter('transmission', v)}
-                            placeholder="Vites seç"
-                          />
-                        </div>
-                      </div>
-
-                      {/* Kasa + Renk */}
-                      <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <label className="text-[10px] font-medium text-muted-foreground mb-1 block uppercase tracking-wide">Kasa Tipi</label>
-                          <MultiSelectChips
-                            options={FILTER_OPTIONS.kasa.map(v => ({ value: v, label: v }))}
-                            selected={filterState.bodyType}
-                            onChange={v => updateFilter('bodyType', v)}
-                            placeholder="Kasa seç"
-                          />
-                        </div>
-                        <div>
-                          <label className="text-[10px] font-medium text-muted-foreground mb-1 block uppercase tracking-wide">Renk</label>
-                          <MultiSelectChips
-                            options={colorOptions}
-                            selected={filterState.color}
-                            onChange={v => updateFilter('color', v)}
-                            placeholder="Renk seç"
-                          />
-                        </div>
-                      </div>
-
-                      {/* Renk hariç tutma */}
-                      {filterState.colorExclude.length > 0 || showAdvanced ? (
-                        <div>
-                          <label className="text-[10px] font-medium text-muted-foreground mb-1 block uppercase tracking-wide">Renk Hariç Tut</label>
-                          <MultiSelectChips
-                            options={colorOptions}
-                            selected={filterState.colorExclude}
-                            onChange={v => updateFilter('colorExclude', v)}
-                            placeholder="Bu renkler olmasın"
-                          />
-                        </div>
-                      ) : null}
-
-                      {/* Şehir + İlçe */}
-                      <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <label className="text-[10px] font-medium text-muted-foreground mb-1 block uppercase tracking-wide">Şehir</label>
-                          <MultiSelectChips
-                            options={FILTER_OPTIONS.sehir.map(v => ({ value: v, label: v }))}
-                            selected={filterState.city}
-                            onChange={v => updateFilter('city', v)}
-                            placeholder="Şehir seç"
-                          />
-                        </div>
-                        <div>
-                          <label className="text-[10px] font-medium text-muted-foreground mb-1 block uppercase tracking-wide">
-                            İlçe {filterState.city.length === 1 ? `(${districts.length})` : filterState.city.length > 1 ? '(tek şehir seç)' : ''}
-                          </label>
-                          <MultiSelectChips
-                            options={filterState.city.length === 1 ? districts.map(d => ({ value: d.district, label: d.district, count: d.count })) : []}
-                            selected={filterState.district}
-                            onChange={v => updateFilter('district', v)}
-                            placeholder={filterState.city.length === 1 ? 'İlçe seç' : 'Önce şehir seç'}
-                          />
-                        </div>
-                      </div>
-
-                      {/* Satıcı tipi + Kazalı durumu */}
-                      <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <label className="text-[10px] font-medium text-muted-foreground mb-1 block uppercase tracking-wide">Satıcı Tipi</label>
-                          <MultiSelectChips
-                            options={FILTER_OPTIONS.satici.map(v => ({ value: v, label: v }))}
-                            selected={filterState.sellerType}
-                            onChange={v => updateFilter('sellerType', v)}
-                            placeholder="Satıcı seç"
-                          />
-                        </div>
-                        <div>
-                          <label className="text-[10px] font-medium text-muted-foreground mb-1 block uppercase tracking-wide">Kazalı Durumu</label>
-                          <MultiSelectChips
-                            options={FILTER_OPTIONS.kazali.map(v => ({ value: v.value, label: v.label }))}
-                            selected={filterState.accidentStatus}
-                            onChange={v => updateFilter('accidentStatus', v)}
-                            placeholder="Kazalı durumu seç"
-                          />
-                        </div>
-                      </div>
-
-                      {/* Trim */}
-                      <div>
-                        <label className="text-[10px] font-medium text-muted-foreground mb-1 block uppercase tracking-wide">Trim / Motor Detayı (içeren)</label>
-                        <Input
-                          value={filterState.trim}
-                          onChange={e => updateFilter('trim', e.target.value)}
-                          placeholder="örn: 320i M Sport, 1.5 TDI, Plug-in"
-                          className="bg-[#0F0F0F] text-sm"
+                      {/* Yakıt Tipi — kendi kutusu */}
+                      <div className="p-3 rounded-lg border border-[#2A2A2A] bg-[#0F0F0F]">
+                        <label className="text-[10px] font-semibold text-orange-500 mb-2 block uppercase tracking-wide flex items-center gap-1.5">
+                          <span className="w-1 h-1 rounded-full bg-orange-500" />
+                          Yakıt Tipi
+                        </label>
+                        <MultiSelectChips
+                          options={[
+                            ...fuelTypes.map(f => ({ value: f.fuelType, label: f.fuelType, count: f.count })),
+                            ...FILTER_OPTIONS.yakit
+                              .filter(y => !fuelTypes.some(f => f.fuelType === y))
+                              .map(v => ({ value: v, label: v })),
+                          ]}
+                          selected={filterState.fuelType}
+                          onChange={v => updateFilter('fuelType', v)}
+                          placeholder="Yakıt tipi seç (çoklu)"
                         />
                       </div>
 
-                      {/* DealScore min yıldız */}
-                      <div>
-                        <label className="text-[10px] font-medium text-muted-foreground mb-1 block uppercase tracking-wide">Minimum DealScore (Fırsat Puanı)</label>
+                      {/* Vites Tipi — kendi kutusu */}
+                      <div className="p-3 rounded-lg border border-[#2A2A2A] bg-[#0F0F0F]">
+                        <label className="text-[10px] font-semibold text-orange-500 mb-2 block uppercase tracking-wide flex items-center gap-1.5">
+                          <span className="w-1 h-1 rounded-full bg-orange-500" />
+                          Vites Tipi
+                        </label>
+                        <MultiSelectChips
+                          options={[
+                            ...transmissions.map(t => ({ value: t.transmission, label: t.transmission, count: t.count })),
+                            ...FILTER_OPTIONS.vites
+                              .filter(y => !transmissions.some(t => t.transmission === y))
+                              .map(v => ({ value: v, label: v })),
+                          ]}
+                          selected={filterState.transmission}
+                          onChange={v => updateFilter('transmission', v)}
+                          placeholder="Vites tipi seç (çoklu)"
+                        />
+                      </div>
+
+                      {/* Kasa Tipi — kendi kutusu */}
+                      <div className="p-3 rounded-lg border border-[#2A2A2A] bg-[#0F0F0F]">
+                        <label className="text-[10px] font-semibold text-orange-500 mb-2 block uppercase tracking-wide flex items-center gap-1.5">
+                          <span className="w-1 h-1 rounded-full bg-orange-500" />
+                          Kasa Tipi
+                        </label>
+                        <MultiSelectChips
+                          options={[
+                            ...bodyTypes.map(b => ({ value: b.bodyType, label: b.bodyType, count: b.count })),
+                            ...FILTER_OPTIONS.kasa
+                              .filter(y => !bodyTypes.some(b => b.bodyType === y))
+                              .map(v => ({ value: v, label: v })),
+                          ]}
+                          selected={filterState.bodyType}
+                          onChange={v => updateFilter('bodyType', v)}
+                          placeholder="Kasa tipi seç (çoklu)"
+                        />
+                      </div>
+
+                      {/* Trim / Motor Detayı — kendi kutusu (cascade dropdown) */}
+                      <div className="p-3 rounded-lg border border-[#2A2A2A] bg-[#0F0F0F]">
+                        <label className="text-[10px] font-semibold text-orange-500 mb-2 block uppercase tracking-wide flex items-center gap-1.5">
+                          <span className="w-1 h-1 rounded-full bg-orange-500" />
+                          Trim / Motor Detayı {filterState.make.length === 1 && filterState.model.length === 1 ? `(${trims.length})` : ''}
+                        </label>
+                        {filterState.make.length === 1 && filterState.model.length === 1 && trims.length > 0 ? (
+                          <MultiSelectChips
+                            options={trims.map(t => ({ value: t.trim, label: t.trim, count: t.count }))}
+                            selected={filterState.trim ? [filterState.trim] : []}
+                            onChange={v => updateFilter('trim', v[v.length - 1] || '')}
+                            placeholder="Trim seç (tek) veya aşağıdan serbest yaz"
+                          />
+                        ) : null}
+                        <input
+                          value={filterState.trim}
+                          onChange={e => updateFilter('trim', e.target.value)}
+                          placeholder={
+                            filterState.make.length === 1 && filterState.model.length === 1
+                              ? "örn: 320i M Sport, 1.5 TDI (veya yukarıdan seç)"
+                              : "Önce tek marka + tek model seç, sonra trim seçebilirsin"
+                          }
+                          disabled={filterState.make.length !== 1 || filterState.model.length !== 1}
+                          className="w-full mt-2 px-3 py-2 bg-[#1A1A1A] border border-[#2A2A2A] rounded-md text-xs text-white placeholder-gray-600 disabled:opacity-50"
+                        />
+                      </div>
+
+                      {/* Renk — kendi kutusu */}
+                      <div className="p-3 rounded-lg border border-[#2A2A2A] bg-[#0F0F0F]">
+                        <label className="text-[10px] font-semibold text-orange-500 mb-2 block uppercase tracking-wide flex items-center gap-1.5">
+                          <span className="w-1 h-1 rounded-full bg-orange-500" />
+                          Renk
+                        </label>
+                        <MultiSelectChips
+                          options={colorOptions}
+                          selected={filterState.color}
+                          onChange={v => updateFilter('color', v)}
+                          placeholder="Renk seç (çoklu)"
+                        />
+                      </div>
+
+                      {/* Renk Hariç Tut — kendi kutusu */}
+                      <div className="p-3 rounded-lg border border-[#2A2A2A] bg-[#0F0F0F]">
+                        <label className="text-[10px] font-semibold text-orange-500 mb-2 block uppercase tracking-wide flex items-center gap-1.5">
+                          <span className="w-1 h-1 rounded-full bg-orange-500" />
+                          Renk Hariç Tut
+                        </label>
+                        <MultiSelectChips
+                          options={colorOptions}
+                          selected={filterState.colorExclude}
+                          onChange={v => updateFilter('colorExclude', v)}
+                          placeholder="Bu renkler OLMASIN"
+                        />
+                      </div>
+
+                      {/* Şehir — kendi kutusu */}
+                      <div className="p-3 rounded-lg border border-[#2A2A2A] bg-[#0F0F0F]">
+                        <label className="text-[10px] font-semibold text-orange-500 mb-2 block uppercase tracking-wide flex items-center gap-1.5">
+                          <span className="w-1 h-1 rounded-full bg-orange-500" />
+                          Şehir
+                        </label>
+                        <MultiSelectChips
+                          options={FILTER_OPTIONS.sehir.map(v => ({ value: v, label: v }))}
+                          selected={filterState.city}
+                          onChange={v => updateFilter('city', v)}
+                          placeholder="Şehir seç (çoklu)"
+                        />
+                      </div>
+
+                      {/* İlçe — kendi kutusu (cascade) */}
+                      <div className="p-3 rounded-lg border border-[#2A2A2A] bg-[#0F0F0F]">
+                        <label className="text-[10px] font-semibold text-orange-500 mb-2 block uppercase tracking-wide flex items-center gap-1.5">
+                          <span className="w-1 h-1 rounded-full bg-orange-500" />
+                          İlçe {filterState.city.length === 1 ? `(${districts.length})` : filterState.city.length > 1 ? '(tek şehir seç)' : ''}
+                        </label>
+                        <MultiSelectChips
+                          options={filterState.city.length === 1 ? districts.map(d => ({ value: d.district, label: d.district, count: d.count })) : []}
+                          selected={filterState.district}
+                          onChange={v => updateFilter('district', v)}
+                          placeholder={filterState.city.length === 1 ? 'İlçe seç (çoklu)' : 'Önce tek şehir seç'}
+                        />
+                      </div>
+
+                      {/* Satıcı Tipi — kendi kutusu */}
+                      <div className="p-3 rounded-lg border border-[#2A2A2A] bg-[#0F0F0F]">
+                        <label className="text-[10px] font-semibold text-orange-500 mb-2 block uppercase tracking-wide flex items-center gap-1.5">
+                          <span className="w-1 h-1 rounded-full bg-orange-500" />
+                          Satıcı Tipi
+                        </label>
+                        <MultiSelectChips
+                          options={FILTER_OPTIONS.satici.map(v => ({ value: v, label: v }))}
+                          selected={filterState.sellerType}
+                          onChange={v => updateFilter('sellerType', v)}
+                          placeholder="Satıcı tipi seç (çoklu)"
+                        />
+                      </div>
+
+                      {/* Kazalı Durumu — kendi kutusu */}
+                      <div className="p-3 rounded-lg border border-[#2A2A2A] bg-[#0F0F0F]">
+                        <label className="text-[10px] font-semibold text-orange-500 mb-2 block uppercase tracking-wide flex items-center gap-1.5">
+                          <span className="w-1 h-1 rounded-full bg-orange-500" />
+                          Kazalı / Hasar Durumu
+                        </label>
+                        <MultiSelectChips
+                          options={FILTER_OPTIONS.kazali.map(v => ({ value: v.value, label: v.label }))}
+                          selected={filterState.accidentStatus}
+                          onChange={v => updateFilter('accidentStatus', v)}
+                          placeholder="Kazalı durumu seç (çoklu)"
+                        />
+                      </div>
+
+                      {/* DealScore Min — kendi kutusu */}
+                      <div className="p-3 rounded-lg border border-[#2A2A2A] bg-[#0F0F0F]">
+                        <label className="text-[10px] font-semibold text-orange-500 mb-2 block uppercase tracking-wide flex items-center gap-1.5">
+                          <span className="w-1 h-1 rounded-full bg-orange-500" />
+                          Minimum DealScore (Fırsat Puanı)
+                        </label>
                         <StarPicker
                           value={filterState.dealScoreMin}
                           onChange={v => updateFilter('dealScoreMin', v)}
                         />
                       </div>
 
-                      {/* Fırsat etiketi */}
-                      <div>
-                        <label className="text-[10px] font-medium text-muted-foreground mb-1 block uppercase tracking-wide">Fırsat Etiketi</label>
+                      {/* Fırsat Etiketi — kendi kutusu */}
+                      <div className="p-3 rounded-lg border border-[#2A2A2A] bg-[#0F0F0F]">
+                        <label className="text-[10px] font-semibold text-orange-500 mb-2 block uppercase tracking-wide flex items-center gap-1.5">
+                          <span className="w-1 h-1 rounded-full bg-orange-500" />
+                          Fırsat Etiketi
+                        </label>
                         <MultiSelectChips
                           options={FILTER_OPTIONS.firsat.map(v => ({ value: v, label: v }))}
                           selected={filterState.dealTag}
                           onChange={v => updateFilter('dealTag', v)}
-                          placeholder="Fırsat etiketi seç"
+                          placeholder="Fırsat etiketi seç (çoklu)"
                         />
                       </div>
                     </motion.div>
