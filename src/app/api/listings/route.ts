@@ -341,6 +341,7 @@ export async function GET(request: Request) {
     } catch (err) {
       dbError = err instanceof Error ? err.message : String(err);
       console.warn('[API /listings] DB query failed, will use fallback:', dbError);
+      console.warn('[API /listings] Where clause was:', JSON.stringify(where, null, 2));
     }
 
     // DB empty/error → static fallback (live scrape disabled for preview speed)
@@ -352,8 +353,8 @@ export async function GET(request: Request) {
         limit: fallbackResult.limit, totalPages: fallbackResult.totalPages,
         aggregations: fallbackResult.aggregations,
       };
-      await cache.set(cacheKey, result, 60_000); // short TTL — 1 min — so filter changes reflect quickly
-      return NextResponse.json({ ...result, _fallback: true });
+      await cache.set(cacheKey, result, 30_000); // 30s TTL
+      return NextResponse.json({ ...result, _fallback: true, _dbError: dbError, _where: where });
     }
 
     // DB has results
