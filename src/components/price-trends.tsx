@@ -1,11 +1,13 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts'
 import { TrendingUp, BarChart3, PieChart as PieIcon } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
+import { ScrollArea } from '@/components/ui/scroll-area'
 
 const DEAL_COLORS: Record<string, string> = {
   'Harika Fırsat': '#16a34a',
@@ -32,6 +34,7 @@ const formatPrice = (v: number) => {
 export function PriceTrends() {
   const [data, setData] = useState<any>(null)
   const [loading, setLoading] = useState(true)
+  const router = useRouter()
 
   useEffect(() => {
     fetch('/api/admin/trends')
@@ -39,6 +42,11 @@ export function PriceTrends() {
       .then(d => { setData(d); setLoading(false) })
       .catch(() => setLoading(false))
   }, [])
+
+  // Fırsat etiketine tıklayınca o etikete sahip ilanları listele
+  const handleDealTagClick = (tag: string) => {
+    router.push(`/?dealTag=${encodeURIComponent(tag)}`)
+  }
 
   if (loading) {
     return (
@@ -65,7 +73,7 @@ export function PriceTrends() {
       transition={{ duration: 0.3 }}
       className="space-y-4"
     >
-      {/* Marka Bazlı Ortalama Fiyat */}
+      {/* Marka Bazlı Ortalama Fiyat — scroll eklenebilir */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
@@ -74,43 +82,46 @@ export function PriceTrends() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={makes} layout="vertical" margin={{ left: 20, right: 20 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-              <XAxis
-                type="number"
-                tickFormatter={formatPrice}
-                tick={{ fontSize: 11, fill: '#6b7280' }}
-              />
-              <YAxis
-                type="category"
-                dataKey="make"
-                width={100}
-                tick={{ fontSize: 11, fill: '#374151' }}
-              />
-              <Tooltip
-                formatter={(v: number) => [`${v.toLocaleString('tr-TR')} TL`, 'Ort. Fiyat']}
-                contentStyle={{ fontSize: 12, borderRadius: 8 }}
-              />
-              <Bar
-                dataKey="avgPrice"
-                fill="#ea580c"
-                radius={[0, 4, 4, 0]}
-                name="Ort. Fiyat"
-              />
-            </BarChart>
-          </ResponsiveContainer>
+          <ScrollArea className="h-[400px] w-full rounded-md border border-border/40 p-2">
+            <ResponsiveContainer width="100%" height={Math.max(300, makes.length * 32)}>
+              <BarChart data={makes} layout="vertical" margin={{ left: 20, right: 30, top: 10, bottom: 10 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                <XAxis
+                  type="number"
+                  tickFormatter={formatPrice}
+                  tick={{ fontSize: 11, fill: '#6b7280' }}
+                />
+                <YAxis
+                  type="category"
+                  dataKey="make"
+                  width={100}
+                  tick={{ fontSize: 11, fill: '#374151' }}
+                />
+                <Tooltip
+                  formatter={(v: number) => [`${v.toLocaleString('tr-TR')} TL`, 'Ort. Fiyat']}
+                  contentStyle={{ fontSize: 12, borderRadius: 8 }}
+                />
+                <Bar
+                  dataKey="avgPrice"
+                  fill="#ea580c"
+                  radius={[0, 4, 4, 0]}
+                  name="Ort. Fiyat"
+                />
+              </BarChart>
+            </ResponsiveContainer>
+          </ScrollArea>
         </CardContent>
       </Card>
 
       {/* İki grafik yan yana */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* Deal Tag Dağılımı */}
+        {/* Deal Tag Dağılımı — tıklanabilir */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
               <PieIcon className="h-5 w-5 text-orange-600" />
               Fırsat Dağılımı
+              <span className="text-xs font-normal text-muted-foreground ml-auto">(etikete tıkla → ilanları listele)</span>
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -126,14 +137,42 @@ export function PriceTrends() {
                   label={(e: any) => `${e.tag}: ${e.count}`}
                   labelLine={false}
                   fontSize={10}
+                  onClick={(e: any) => e?.tag && handleDealTagClick(e.tag)}
+                  style={{ cursor: 'pointer' }}
                 >
                   {deals.map((entry: any, i: number) => (
-                    <Cell key={i} fill={DEAL_COLORS[entry.tag] || '#9ca3af'} />
+                    <Cell
+                      key={i}
+                      fill={DEAL_COLORS[entry.tag] || '#9ca3af'}
+                      style={{ cursor: 'pointer' }}
+                    />
                   ))}
                 </Pie>
                 <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8 }} />
               </PieChart>
             </ResponsiveContainer>
+            {/* Etiket butonları — tıklanabilir */}
+            <div className="flex flex-wrap gap-1.5 mt-3 justify-center">
+              {deals.map((entry: any) => (
+                <button
+                  key={entry.tag}
+                  onClick={() => handleDealTagClick(entry.tag)}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium hover:opacity-80 transition-opacity border"
+                  style={{
+                    backgroundColor: (DEAL_COLORS[entry.tag] || '#9ca3af') + '20',
+                    color: DEAL_COLORS[entry.tag] || '#9ca3af',
+                    borderColor: (DEAL_COLORS[entry.tag] || '#9ca3af') + '40',
+                  }}
+                >
+                  <span
+                    className="w-2 h-2 rounded-full"
+                    style={{ backgroundColor: DEAL_COLORS[entry.tag] || '#9ca3af' }}
+                  />
+                  {entry.tag}
+                  <span className="opacity-70">({entry.count})</span>
+                </button>
+              ))}
+            </div>
           </CardContent>
         </Card>
 

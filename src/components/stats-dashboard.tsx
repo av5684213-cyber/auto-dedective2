@@ -39,7 +39,7 @@ interface StatsData {
   cacheStats: { keys: number; hits: number; misses: number; hitRate: number }
 }
 
-export function StatsDashboard() {
+export function StatsDashboard({ onDealTagClick }: { onDealTagClick?: (tag: string) => void }) {
   const [stats, setStats] = useState<StatsData | null>(null)
   const [loading, setLoading] = useState(true)
   const [scraping, setScraping] = useState(false)
@@ -257,20 +257,29 @@ export function StatsDashboard() {
               <CardTitle className="text-base flex items-center gap-2">
                 <TrendingUp className="h-4 w-4 text-amber-500" />
                 Fırsat Dağılımı
+                <span className="text-[10px] font-normal text-muted-foreground ml-auto">(etikete tıkla → listele)</span>
               </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="flex flex-wrap gap-2 mb-4">
                 {stats.dealTagDistribution.map((d) => (
-                  <div key={d.tag} className="flex items-center gap-1.5">
+                  <button
+                    key={d.tag}
+                    onClick={() => onDealTagClick?.(d.tag)}
+                    className="flex items-center gap-1.5 hover:scale-105 transition-transform cursor-pointer"
+                    title={`${d.tag} ilanlarını listele`}
+                  >
                     <DealBadge tag={d.tag} />
                     <span className="text-sm font-medium">{d.count}</span>
-                  </div>
+                  </button>
                 ))}
               </div>
               <Separator className="my-3" />
               {/* Visual bar */}
-              <div className="flex h-6 rounded-full overflow-hidden">
+              <div
+                className="flex h-6 rounded-full overflow-hidden cursor-pointer"
+                title="Dilime tıkla → ilanları listele"
+              >
                 {stats.dealTagDistribution.map((d) => {
                   const config = DEAL_TAG_CONFIG[d.tag]
                   const percentage = (d.count / stats.totalActive) * 100
@@ -278,7 +287,8 @@ export function StatsDashboard() {
                   return (
                     <div
                       key={d.tag}
-                      className="flex items-center justify-center text-[9px] font-medium"
+                      onClick={() => onDealTagClick?.(d.tag)}
+                      className="flex items-center justify-center text-[9px] font-medium hover:opacity-80 transition-opacity"
                       style={{
                         width: `${percentage}%`,
                         backgroundColor: config.bgColor,

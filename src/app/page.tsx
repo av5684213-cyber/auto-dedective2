@@ -334,7 +334,14 @@ export default function Home() {
               exit={{ opacity: 0 }}
               transition={{ duration: 0.2 }}
             >
-              <StatsDashboard />
+              <StatsDashboard
+                onDealTagClick={(tag) => {
+                  // Fırsat etiketine tıklayınca ana sayfaya dön + filter uygula
+                  setView('search')
+                  setFilters(prev => ({ ...prev, dealTag: tag }))
+                  updateUrl({ ...filters, dealTag: tag })
+                }}
+              />
             </motion.div>
           )}
         </AnimatePresence>

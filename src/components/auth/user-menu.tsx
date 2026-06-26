@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { useSession, signOut } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
-import { LogOut, ChevronDown, Heart } from 'lucide-react'
+import { LogOut, ChevronDown, Heart, User, Bell } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 
@@ -79,6 +79,13 @@ export function UserMenu() {
 
           {/* Menu items */}
           <div className="py-1">
+            <button
+              onClick={() => { setOpen(false); router.push('/hesabim') }}
+              className="flex items-center gap-2 w-full px-4 py-2 text-sm text-foreground hover:bg-muted transition-colors cursor-pointer"
+            >
+              <User className="h-4 w-4" />
+              Hesabım
+            </button>
             <button
               onClick={() => { setOpen(false); router.push('/favorites') }}
               className="flex items-center gap-2 w-full px-4 py-2 text-sm text-foreground hover:bg-muted transition-colors cursor-pointer"
