@@ -125,8 +125,10 @@ model User {
   createdAt     DateTime  @default(now()) @map("created_at")
   updatedAt     DateTime  @updatedAt @map("updated_at")
 
-  favorites     UserFavorite[]
-  savedSearches SavedSearch[]
+  favorites         UserFavorite[]
+  savedSearches     SavedSearch[]
+  pushSubscriptions PushSubscription[]
+  telegramConnections TelegramConnection[]
 
   @@map("users")
 }
@@ -182,11 +184,15 @@ model SavedSearch {
   name          String   // kullanıcı verdiği isim, örn "BMW 320i İstanbul 2020+"
   // Filtre kriterleri (JSON olarak saklanır)
   filters       String   @map("filters") // JSON: {make, model, yearMin, yearMax, priceMin, priceMax, fuelType, transmission, city, ...}
-  // Bildirim ayarları
+  // Bildirim kanalları (eski alanlar — backward compat için duruyor)
   notifyEmail   Boolean  @default(true) @map("notify_email")
   notifyPush    Boolean  @default(true) @map("notify_push")
+  // Yeni: coklu kanal destegi — JSON array string olarak saklanir
+  channels      String   @default("email,push") @map("channels")
   // Son kontrol zamanı (bu tarihten sonra eklenen ilanları ara)
   lastCheckedAt DateTime @default(now()) @map("last_checked_at")
+  // Son bildirim gönderme zamanı
+  lastNotifiedAt DateTime? @map("last_notified_at")
   // Eşleşen ilan ID'leri (bildirim gönderilenler — tekrar göndermemek için)
   notifiedListingIds String @default("[]") @map("notified_listing_ids") // JSON array
   isActive      Boolean  @default(true) @map("is_active")
@@ -194,8 +200,71 @@ model SavedSearch {
   updatedAt     DateTime @updatedAt @map("updated_at")
 
   user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  notifications AlertNotification[]
 
   @@index([userId])
   @@index([isActive])
   @@map("saved_searches")
+}
+
+// ── Alert Bildirim Sistemi ────────────────────────────────────────────────
+//
+// Her kanaldan gönderilen bildirimler — aynı ilan için tekrar göndermeyi önler.
+// Cron her gece çalışır, aktif SavedSearch'leri tarar, yeni ilanları bulur,
+// bu tabloya kaydeder ve ilgili kanallara (email/push/telegram) paralel gönderir.
+
+model AlertNotification {
+  id         String   @id @default(cuid())
+  alertId    String   @map("alert_id")
+  listingId  String   @map("listing_id")
+  channels   String   @default("[]") @map("channels") // JSON array: ["email","push"]
+  sentAt     DateTime @default(now()) @map("sent_at")
+
+  alert      SavedSearch @relation(fields: [alertId], references: [id], onDelete: Cascade)
+
+  @@unique([alertId, listingId])
+  @@index([alertId])
+  @@index([listingId])
+  @@index([sentAt])
+  @@map("alert_notifications")
+}
+
+// ── Web Push Subscriptions ────────────────────────────────────────────────
+//
+// Tarayıcı service worker'dan gelen push subscription objesi saklanır.
+// Bir kullanıcının birden çok cihazı olabilir (telefon, masaüstü).
+
+model PushSubscription {
+  id           String   @id @default(cuid())
+  userId       String   @map("user_id")
+  endpoint     String   @unique
+  p256dhKey    String   @map("p256dh_key")
+  authKey      String   @map("auth_key")
+  // User-agent bilgisi (cihaz tanıma için)
+  userAgent    String?  @map("user_agent")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("push_subscriptions")
+}
+
+// ── Telegram Bağlantıları ─────────────────────────────────────────────────
+//
+// Kullanıcı @OtodedektifBot'a /start attığında chat_id buraya kaydedilir.
+// Bir kullanıcı sadece 1 Telegram hesabını bağlayabilir (unique user_id).
+
+model TelegramConnection {
+  id          String   @id @default(cuid())
+  userId      String   @unique @map("user_id")
+  chatId      String   @unique @map("chat_id")
+  username    String?  @map("username")
+  firstName   String?  @map("first_name")
+  connectedAt DateTime @default(now()) @map("connected_at")
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("telegram_connections")
 }

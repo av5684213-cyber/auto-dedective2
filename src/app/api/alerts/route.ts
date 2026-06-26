@@ -3,7 +3,6 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { z } from 'zod';
-import type { SearchFilters } from '@/lib/types';
 
 // ── POST /api/alerts — Kaydet ───────────────────────────────────────────
 // ── GET /api/alerts — Listele ───────────────────────────────────────────
@@ -24,10 +23,13 @@ const createAlertSchema = z.object({
     bodyType: z.string().optional(),
     city: z.string().optional(),
     sellerType: z.string().optional(),
-    dealTag: z.string().optional(),
+    dealTag: z.union([z.string(), z.array(z.string())]).optional(),
   }),
-  notifyEmail: z.boolean().default(true),
-  notifyPush: z.boolean().default(true),
+  // Yeni: çoklu kanal seçimi
+  channels: z.array(z.enum(['email', 'push', 'telegram'])).min(1, 'En az 1 kanal seçin').default(['email', 'push']),
+  // Backward compat (eski UI'dan gelen istekler için)
+  notifyEmail: z.boolean().optional(),
+  notifyPush: z.boolean().optional(),
 });
 
 export async function GET() {
@@ -37,12 +39,26 @@ export async function GET() {
       return NextResponse.json({ error: 'Giriş yapmalısınız' }, { status: 401 });
     }
 
-    const alerts = await db.savedSearch.findMany({
-      where: { userId: session.user.id, isActive: true },
-      orderBy: { createdAt: 'desc' },
-    });
+    const [alerts, telegramConn, pushCount] = await Promise.all([
+      db.savedSearch.findMany({
+        where: { userId: session.user.id, isActive: true },
+        orderBy: { createdAt: 'desc' },
+      }),
+      db.telegramConnection.findUnique({
+        where: { userId: session.user.id },
+        select: { chatId: true, username: true, firstName: true, connectedAt: true },
+      }),
+      db.pushSubscription.count({ where: { userId: session.user.id } }),
+    ]);
 
-    return NextResponse.json({ alerts });
+    return NextResponse.json({
+      alerts,
+      channels: {
+        email: session.user.email,
+        push: { subscribed: pushCount > 0, count: pushCount },
+        telegram: telegramConn,
+      },
+    });
   } catch (error) {
     console.error('[API /alerts GET] Error:', error);
     return NextResponse.json({ error: 'Failed' }, { status: 500 });
@@ -66,7 +82,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const { name, filters, notifyEmail, notifyPush } = parseResult.data;
+    const { name, filters, channels, notifyEmail, notifyPush } = parseResult.data;
 
     // Kullanıcı en fazla 10 alert kaydedebilir
     const count = await db.savedSearch.count({
@@ -79,13 +95,21 @@ export async function POST(request: Request) {
       );
     }
 
+    // Eski alanlar backward-compat için
+    const emailFlag = notifyEmail ?? channels.includes('email');
+    const pushFlag = notifyPush ?? channels.includes('push');
+
+    // channels'ı comma-separated string olarak sakla (DB default formatıyla uyumlu)
+    const channelsStr = Array.isArray(channels) ? channels.join(',') : String(channels)
+
     const alert = await db.savedSearch.create({
       data: {
         userId: session.user.id,
         name,
         filters: JSON.stringify(filters),
-        notifyEmail,
-        notifyPush,
+        channels: channelsStr,
+        notifyEmail: emailFlag,
+        notifyPush: pushFlag,
       },
     });
 
@@ -93,6 +117,49 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error('[API /alerts POST] Error:', error);
     return NextResponse.json({ error: 'Kayıt başarısız' }, { status: 500 });
+  }
+}
+
+export async function PATCH(request: Request) {
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: 'Giriş yapmalısınız' }, { status: 401 });
+    }
+
+    const body = await request.json().catch(() => ({}));
+    const { id, channels, name, isActive } = body;
+
+    if (!id) {
+      return NextResponse.json({ error: 'ID gerekli' }, { status: 400 });
+    }
+
+    // Sadece kendi alert'ini güncelleyebilir
+    const existing = await db.savedSearch.findFirst({
+      where: { id, userId: session.user.id },
+    });
+    if (!existing) {
+      return NextResponse.json({ error: 'Bulunamadı' }, { status: 404 });
+    }
+
+    const data: any = {};
+    if (name) data.name = name;
+    if (channels) {
+      data.channels = Array.isArray(channels) ? channels.join(',') : String(channels);
+      data.notifyEmail = channels.includes('email');
+      data.notifyPush = channels.includes('push');
+    }
+    if (typeof isActive === 'boolean') data.isActive = isActive;
+
+    const updated = await db.savedSearch.update({
+      where: { id },
+      data,
+    });
+
+    return NextResponse.json({ success: true, alert: updated });
+  } catch (error) {
+    console.error('[API /alerts PATCH] Error:', error);
+    return NextResponse.json({ error: 'Güncelleme başarısız' }, { status: 500 });
   }
 }
 
@@ -109,9 +176,10 @@ export async function DELETE(request: Request) {
       return NextResponse.json({ error: 'ID gerekli' }, { status: 400 });
     }
 
-    // Sadece kendi alert'ini silebilir
-    await db.savedSearch.deleteMany({
+    // Sadece kendi alert'ini silebilir (soft delete — isActive=false)
+    await db.savedSearch.updateMany({
       where: { id, userId: session.user.id },
+      data: { isActive: false },
     });
 
     return NextResponse.json({ success: true });
