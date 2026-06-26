@@ -179,9 +179,28 @@ export function analyzeListing(listing: ListingForFilter): PartDetectionResult {
   const reasons: string[] = []
 
   // ── Kriter 1: Araç parçası kelimeleri (yüksek güven, +50) ────────────
-  const matchedPartKeywords = PART_KEYWORDS_HIGH.filter(kw =>
-    combined.includes(kw.toLowerCase())
-  )
+  // "fender" gibi kelimeler "Defender" içinde yanlış eşleşmesin — kelime sınırı kontrolü
+  const matchedPartKeywords = PART_KEYWORDS_HIGH.filter(kw => {
+    const kwLower = kw.toLowerCase()
+    if (!combined.includes(kwLower)) return false
+    // Türkçe karakter normalize et
+    const normalized = combined
+      .replace(/İ/g, 'I').replace(/ı/g, 'i')
+      .replace(/Ş/g, 'S').replace(/ş/g, 's')
+      .replace(/Ğ/g, 'G').replace(/ğ/g, 'g')
+      .replace(/Ü/g, 'U').replace(/ü/g, 'u')
+      .replace(/Ö/g, 'O').replace(/ö/g, 'o')
+      .replace(/Ç/g, 'C').replace(/ç/g, 'c')
+    // İngilizce kelimeler için kelime sınırı kontrolü
+    // "fender" → sadece "fender" kelimesi, "Defender" değil
+    const englishWords = ['fender', 'hood', 'trunk', 'wing', 'wheel', 'tyre', 'tire', 'engine', 'radiator']
+    if (englishWords.includes(kwLower)) {
+      // \b kelime sınırı — önceki karakter harf değil
+      const regex = new RegExp(`\\b${kwLower}\\b`, 'i')
+      return regex.test(normalized)
+    }
+    return true // Türkçe kelimeler için contains yeterli
+  })
   if (matchedPartKeywords.length > 0) {
     confidence += 50
     reasons.push(`parça kelimesi: "${matchedPartKeywords[0]}"`)
