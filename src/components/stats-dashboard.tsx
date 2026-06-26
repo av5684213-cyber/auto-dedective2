@@ -214,9 +214,9 @@ export function StatsDashboard({ onDealTagClick }: { onDealTagClick?: (tag: stri
         <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.2 }}>
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-base flex items-center gap-2">
+              <CardTitle className="text-base flex items-center gap-2 min-w-0">
                 <BarChart3 className="h-4 w-4 text-orange-600" />
-                Kaynak Bazlı İlan Sayısı
+                <span className="truncate min-w-0">Kaynak Bazlı İlan Sayısı</span>
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -254,10 +254,10 @@ export function StatsDashboard({ onDealTagClick }: { onDealTagClick?: (tag: stri
         <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.3 }}>
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-base flex items-center gap-2">
-                <TrendingUp className="h-4 w-4 text-amber-500" />
-                Fırsat Dağılımı
-                <span className="text-[10px] font-normal text-muted-foreground ml-auto">(etikete tıkla → listele)</span>
+              <CardTitle className="text-base flex items-center gap-2 min-w-0">
+                <TrendingUp className="h-4 w-4 text-amber-500 shrink-0" />
+                <span className="truncate min-w-0">Fırsat Dağılımı</span>
+                <span className="text-[10px] font-normal text-muted-foreground ml-auto shrink-0 hidden sm:inline">(etikete tıkla → listele)</span>
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -309,9 +309,9 @@ export function StatsDashboard({ onDealTagClick }: { onDealTagClick?: (tag: stri
         <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.4 }}>
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-base flex items-center gap-2">
+              <CardTitle className="text-base flex items-center gap-2 min-w-0">
                 <TrendingUp className="h-4 w-4 text-green-500" />
-                Marka Bazlı Ortalama Fiyat
+                <span className="truncate min-w-0">Marka Bazlı Ortalama Fiyat</span>
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -336,9 +336,9 @@ export function StatsDashboard({ onDealTagClick }: { onDealTagClick?: (tag: stri
         <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.5 }}>
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-base flex items-center gap-2">
+              <CardTitle className="text-base flex items-center gap-2 min-w-0">
                 <MapPin className="h-4 w-4 text-red-500" />
-                En Çok İlan Olan Şehirler
+                <span className="truncate min-w-0">En Çok İlan Olan Şehirler</span>
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -364,10 +364,10 @@ export function StatsDashboard({ onDealTagClick }: { onDealTagClick?: (tag: stri
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.6 }}>
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-base flex items-center gap-2">
-              <Clock className="h-4 w-4 text-blue-500" />
-              Son Tarama Kayıtları
-            </CardTitle>
+            <CardTitle className="text-base flex items-center gap-2 min-w-0">
+                <Clock className="h-4 w-4 text-blue-500" />
+                <span className="truncate min-w-0">Son Tarama Kayıtları</span>
+              </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="overflow-x-auto">
@@ -430,10 +430,10 @@ export function StatsDashboard({ onDealTagClick }: { onDealTagClick?: (tag: stri
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.7 }}>
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-base flex items-center gap-2">
-              <Car className="h-4 w-4 text-orange-600" />
-              Marka Bazlı İlan Sayısı
-            </CardTitle>
+            <CardTitle className="text-base flex items-center gap-2 min-w-0">
+                <Car className="h-4 w-4 text-orange-600" />
+                <span className="truncate min-w-0">Marka Bazlı İlan Sayısı</span>
+              </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="flex flex-wrap gap-2">

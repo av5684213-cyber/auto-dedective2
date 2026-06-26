@@ -76,10 +76,10 @@ export function PriceTrends() {
       {/* Marka Bazlı Ortalama Fiyat — scroll eklenebilir */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base">
-            <BarChart3 className="h-5 w-5 text-orange-600" />
-            Marka Bazlı Ortalama Fiyat (Top 15)
-          </CardTitle>
+          <CardTitle className="flex items-center gap-2 text-base min-w-0">
+                <BarChart3 className="h-5 w-5 text-orange-600" />
+                <span className="truncate min-w-0">Marka Bazlı Ortalama Fiyat (Top 15)</span>
+              </CardTitle>
         </CardHeader>
         <CardContent>
           <ScrollArea className="h-[400px] w-full rounded-md border border-border/40 p-2">
@@ -118,10 +118,10 @@ export function PriceTrends() {
         {/* Deal Tag Dağılımı — tıklanabilir */}
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-base">
-              <PieIcon className="h-5 w-5 text-orange-600" />
-              Fırsat Dağılımı
-              <span className="text-xs font-normal text-muted-foreground ml-auto">(etikete tıkla → ilanları listele)</span>
+            <CardTitle className="flex items-center gap-2 text-base min-w-0">
+              <PieIcon className="h-5 w-5 text-orange-600 shrink-0" />
+              <span className="truncate min-w-0">Fırsat Dağılımı</span>
+              <span className="text-xs font-normal text-muted-foreground ml-auto shrink-0 hidden sm:inline">(etikete tıkla → ilanları listele)</span>
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -179,10 +179,10 @@ export function PriceTrends() {
         {/* Kaynak Dağılımı */}
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-base">
-              <TrendingUp className="h-5 w-5 text-orange-600" />
-              Kaynak Dağılımı
-            </CardTitle>
+            <CardTitle className="flex items-center gap-2 text-base min-w-0">
+                <TrendingUp className="h-5 w-5 text-orange-600" />
+                <span className="truncate min-w-0">Kaynak Dağılımı</span>
+              </CardTitle>
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={250}>
@@ -207,10 +207,10 @@ export function PriceTrends() {
       {/* Yıl Bazlı Ortalama Fiyat */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base">
-            <TrendingUp className="h-5 w-5 text-orange-600" />
-            Yıl Bazlı Ortalama Fiyat (Son 10 yıl)
-          </CardTitle>
+          <CardTitle className="flex items-center gap-2 text-base min-w-0">
+                <TrendingUp className="h-5 w-5 text-orange-600" />
+                <span className="truncate min-w-0">Yıl Bazlı Ortalama Fiyat (Son 10 yıl)</span>
+              </CardTitle>
         </CardHeader>
         <CardContent>
           <ResponsiveContainer width="100%" height={250}>
