@@ -29,6 +29,13 @@ export async function GET(request: Request) {
       hasNextAuthSecret: !!process.env.NEXTAUTH_SECRET,
       hasNextAuthUrl: !!process.env.NEXTAUTH_URL,
       nodeEnv: process.env.NODE_ENV,
+      // Bildirim env'leri
+      hasResendApiKey: !!process.env.RESEND_API_KEY,
+      emailFrom: process.env.EMAIL_FROM || '(default: bildirim@otodedektif.com)',
+      hasVapidKeys: !!process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY && !!process.env.VAPID_PRIVATE_KEY,
+      hasTelegramBotToken: !!process.env.TELEGRAM_BOT_TOKEN,
+      telegramBotUsername: process.env.TELEGRAM_BOT_USERNAME || null,
+      hasScraperSecret: !!process.env.SCRAPER_SECRET,
     },
     db: { liveCount, error: dbError },
   });

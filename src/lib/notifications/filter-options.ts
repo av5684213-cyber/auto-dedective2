@@ -31,7 +31,7 @@ export const FILTER_OPTIONS = {
   firsat: ['Harika Fırsat', 'İyi Fiyat', 'Ortalama', 'Pahalı', 'Değerlendirilemedi'],
   satici: ['Galeri', 'Sahibinden', 'Bayi', 'Komisyoncu'],
   dealScoreMin: [
-    { value: 5, label: '5 Yıldız — Harika Fırsat' },
+    { value: 5, label: '5 Yıldız — Harika Fırsat (Otodedektif Puanı)' },
     { value: 4, label: '4+ Yıldız — İyi Fiyat' },
     { value: 3, label: '3+ Yıldız — Ortalama' },
     { value: 2, label: '2+ Yıldız — Kabul Edilebilir' },

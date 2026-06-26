@@ -349,7 +349,7 @@ export function ListingDetail({ listing, open, onClose, onComparableClick }: Lis
                     )}
                     {detail.dealScore !== null && detail.dealScore !== undefined && (
                       <div className="p-3 bg-muted/50 rounded-lg">
-                        <p className="text-xs text-muted-foreground">Fırsat Skoru</p>
+                        <p className="text-xs text-muted-foreground">Otodedektif Puanı</p>
                         <div className="flex items-center gap-2">
                           <div className="flex-1 h-3 bg-muted rounded-full overflow-hidden">
                             <motion.div

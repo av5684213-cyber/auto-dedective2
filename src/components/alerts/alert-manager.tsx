@@ -1021,11 +1021,11 @@ export function AlertManager({ open, onClose, currentFilters }: AlertManagerProp
                         />
                       </div>
 
-                      {/* DealScore Min — kendi kutusu */}
+                      {/* Otodedektif Puanı Min — kendi kutusu */}
                       <div className="p-3 rounded-lg border border-[#2A2A2A] bg-[#0F0F0F]">
                         <label className="text-[10px] font-semibold text-orange-500 mb-2 block uppercase tracking-wide flex items-center gap-1.5">
                           <span className="w-1 h-1 rounded-full bg-orange-500" />
-                          Minimum DealScore (Fırsat Puanı)
+                          Minimum Otodedektif Puanı (Fırsat Skoru)
                         </label>
                         <StarPicker
                           value={filterState.dealScoreMin}
