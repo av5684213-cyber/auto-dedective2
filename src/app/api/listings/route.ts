@@ -189,17 +189,39 @@ function buildWhereClause(filters: SearchFilters) {
     }
   }
 
-  // Şehir — contains (case-insensitive), "İstanbul" → "istanbul", "istanbul atasehir" eşleşir
+  // Şehir — contains (case-insensitive), Türkçe karakter normalize
+  // "İstanbul" → "istanbul" ile eşleşir, "istanbul atasehir" de eşleşir
   if (filters.city) {
+    const normalizeTr = (s: string) => s
+      .replace(/İ/g, 'I').replace(/ı/g, 'i')
+      .replace(/Ş/g, 'S').replace(/ş/g, 's')
+      .replace(/Ğ/g, 'G').replace(/ğ/g, 'g')
+      .replace(/Ü/g, 'U').replace(/ü/g, 'u')
+      .replace(/Ö/g, 'O').replace(/ö/g, 'o')
+      .replace(/Ç/g, 'C').replace(/ç/g, 'c')
+      .toLowerCase();
     const cities = Array.isArray(filters.city) ? filters.city.filter(Boolean) : [filters.city];
-    const cleanCities = cities.filter(Boolean);
+    const cleanCities = cities.filter(Boolean).map(normalizeTr);
     if (cleanCities.length === 1) {
-      where.city = { contains: cleanCities[0], mode: 'insensitive' };
+      // DB'deki veriyi de normalize etmek için raw SQL gerekir,
+      // ama Prisma contains insensitive Türkçe İ'yi I'ya çevirmiyor.
+      // Çözüm: hem orijinal hem normalize edilmiş halleri OR ile dene
+      const original = (Array.isArray(filters.city) ? filters.city[0] : filters.city) || '';
+      where.OR = [
+        { city: { contains: original, mode: 'insensitive' as const } },
+        { city: { contains: cleanCities[0], mode: 'insensitive' as const } },
+      ];
     } else if (cleanCities.length > 1) {
+      const originals = (Array.isArray(filters.city) ? filters.city : [filters.city]).filter(Boolean) as string[];
+      const ors: any[] = [];
+      for (let i = 0; i < originals.length; i++) {
+        ors.push({ city: { contains: originals[i], mode: 'insensitive' as const } });
+        ors.push({ city: { contains: cleanCities[i], mode: 'insensitive' as const } });
+      }
       if (where.OR) {
-        where.OR = [...where.OR, ...cleanCities.map(c => ({ city: { contains: c, mode: 'insensitive' as const } }))];
+        where.OR = [...where.OR, ...ors];
       } else {
-        where.OR = cleanCities.map(c => ({ city: { contains: c, mode: 'insensitive' as const } }));
+        where.OR = ors;
       }
     }
   }
