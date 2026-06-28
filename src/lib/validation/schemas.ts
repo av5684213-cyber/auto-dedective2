@@ -39,7 +39,7 @@ export const listingsQuerySchema = z.object({
   sortBy: z
     .enum(['newest', 'price_asc', 'price_desc', 'year_desc', 'year_asc', 'mileage_asc', 'deal_score_desc'])
     .optional()
-    .default('newest'),
+    .default('deal_score_desc'),
   page: z.coerce.number().int().min(1).optional().default(1),
   limit: z.coerce.number().int().min(1).max(100).optional().default(20),
 });

@@ -70,3 +70,9 @@ worklog.md
 *.swo
 # Bun lockfile (Vercel uses npm install)
 bun.lock
+
+
+# Environment variables
+.env
+.env.local
+.env.*.local

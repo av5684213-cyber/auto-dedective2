@@ -477,7 +477,7 @@ export function ListingDetailContent({ initialListing, listingId }: ListingDetai
                   📊 Değerlendirme
                   {detail.dealScore !== null && detail.dealScore !== undefined && (
                     <span className="ml-1.5 text-xs text-muted-foreground">
-                      ({Math.round(detail.dealScore * 100)}%)
+                      (%{Math.abs(Math.round(detail.dealScore * 100))})
                     </span>
                   )}
                 </TabButton>
@@ -531,7 +531,7 @@ export function ListingDetailContent({ initialListing, listingId }: ListingDetai
                       </div>
                       {detail.dealScore !== null && detail.dealScore !== undefined && (
                         <div className="text-right">
-                          <p className="text-2xl font-bold">{Math.round(detail.dealScore * 100)}%</p>
+                          <p className="text-2xl font-bold">%{Math.abs(Math.round(detail.dealScore * 100))}</p>
                           <p className="text-xs text-muted-foreground">Fırsat Skoru</p>
                         </div>
                       )}
@@ -860,12 +860,12 @@ function PriceBox({
             Tahmini: {formatPrice(detail.estimatedValue)}
             {detail.price < detail.estimatedValue && (
               <span className="text-green-600 ml-1">
-                ({Math.round((1 - detail.price / detail.estimatedValue) * 100)}% altında)
+                (%{Math.round((1 - detail.price / detail.estimatedValue) * 100)} altında)
               </span>
             )}
             {detail.price > detail.estimatedValue && (
               <span className="text-red-500 ml-1">
-                ({Math.round((detail.price / detail.estimatedValue - 1) * 100)}% üstünde)
+                (%{Math.round((detail.price / detail.estimatedValue - 1) * 100)} üstünde)
               </span>
             )}
           </p>

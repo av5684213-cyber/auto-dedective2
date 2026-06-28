@@ -274,7 +274,7 @@ function buildOrderBy(sortBy?: string | null) {
     case 'year_desc': return { year: 'desc' as const };
     case 'year_asc': return { year: 'asc' as const };
     case 'mileage_asc': return { mileageKm: 'asc' as const };
-    case 'deal_score_desc': return { dealScore: 'desc' as const };
+    case 'deal_score_desc': return { dealScore: 'asc' as const };
     case 'newest':
     default: return { lastSeenAt: 'desc' as const };
   }

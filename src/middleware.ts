@@ -36,6 +36,24 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
+  // ── New admin panel API routes (session-based auth) ────────────────────
+  // These routes use getServerSession() + role check internally.
+  // The middleware lets them through so they can do their own auth check.
+  // (Bearer-token ADMIN_TOKEN auth still applies to legacy /api/admin/scrape,
+  //  /api/admin/scheduler, /api/admin/clean-parts, /api/admin/cron.)
+  const SESSION_AUTHED_PATHS = [
+    '/api/admin/leads',
+    '/api/admin/listings',
+    '/api/admin/dealers',
+    '/api/admin/data-quality',
+    '/api/admin/sales-pipeline',
+    '/api/admin/partner-integrations',
+    '/api/admin/alerts-monitoring',
+  ]
+  if (SESSION_AUTHED_PATHS.some((p) => pathname === p || pathname.startsWith(p + '/'))) {
+    return NextResponse.next()
+  }
+
   const acceptedTokens: string[] = [];
   if (process.env.ADMIN_TOKEN && process.env.ADMIN_TOKEN.length >= 16) {
     acceptedTokens.push(process.env.ADMIN_TOKEN);

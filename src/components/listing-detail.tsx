@@ -364,7 +364,7 @@ export function ListingDetail({ listing, open, onClose, onComparableClick }: Lis
                               }`}
                             />
                           </div>
-                          <span className="text-sm font-bold">{Math.round(detail.dealScore * 100)}%</span>
+                          <span className="text-sm font-bold">%{Math.abs(Math.round(detail.dealScore * 100))}</span>
                         </div>
                       </div>
                     )}

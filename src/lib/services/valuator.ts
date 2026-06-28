@@ -15,7 +15,7 @@ interface ValueEstimate {
   matchLevel?: 'strict' | 'relaxed_fuel' | 'relaxed_year' | 'none';
 }
 
-const MIN_SAMPLE_SIZE = 5;
+const MIN_SAMPLE_SIZE = 1;
 const HIGH_CONFIDENCE_SIZE = 20;
 const MEDIUM_CONFIDENCE_SIZE = 10;
 const MILEAGE_ADJ_MAX_PCT = 0.20;
@@ -189,7 +189,6 @@ export class Valuator {
   }
 
   private static getDealTag(score: number, confidence: string): string {
-    if (confidence === 'insufficient') return 'Değerlendirilemedi';
     if (score < -0.15) return 'Harika Fırsat';
     if (score < -0.05) return 'İyi Fiyat';
     if (score < 0.05) return 'Piyasa Fiyatı';

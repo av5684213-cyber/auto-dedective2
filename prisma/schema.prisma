@@ -68,6 +68,21 @@ model Listing {
   // Hasar kaydı detayı (description'dan çıkarılan özet)
   damageInfo              String?  @map("damage_info")
 
+  // ── Katalog eşleştirme ────────────────────────────────────────────────────
+  rawMake                 String?  @map("raw_make")
+  rawModel                String?  @map("raw_model")
+  variantId               String?  @map("variant_id")
+  variant                 VehicleVariant? @relation(fields: [variantId], references: [id], onDelete: SetNull)
+  matchConfidence         Float?   @map("match_confidence")
+  matchStatus             String?  @map("match_status") // matched | unmatched | manual_review
+
+  // ── Esnaf/Galeri (B2B) ────────────────────────────────────────────────────
+  dealerId                String?  @map("dealer_id")
+  dealer                  Dealer?  @relation(fields: [dealerId], references: [id], onDelete: SetNull)
+
+  // ── Müşteri talepleri (Lead) ──────────────────────────────────────────────
+  leads                   Lead[]
+
   priceHistory    PriceHistory[]
   duplicateGroupId String? @map("duplicate_group_id")
 
@@ -276,4 +291,132 @@ model TelegramConnection {
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("telegram_connections")
+}
+
+// ── Araç Kataloğu (Marka → Seri → Varyant) ────────────────────────────────
+
+model VehicleBrand {
+  id     String @id @default(cuid())
+  name   String @unique
+  series VehicleSeries[]
+  @@map("vehicle_brands")
+}
+
+model VehicleSeries {
+  id        String @id @default(cuid())
+  brandId   String @map("brand_id")
+  brand     VehicleBrand @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  name      String
+  variants  VehicleVariant[]
+  @@unique([brandId, name])
+  @@index([brandId])
+  @@map("vehicle_series")
+}
+
+model VehicleVariant {
+  id             String   @id @default(cuid())
+  seriesId       String   @map("series_id")
+  series         VehicleSeries @relation(fields: [seriesId], references: [id], onDelete: Cascade)
+  name           String
+  engineCc       Int?     @map("engine_cc")
+  powerHp        Int?     @map("power_hp")
+  fuelType       String?  @map("fuel_type")
+  avgConsumption Float?   @map("avg_consumption")
+  source         String   @default("tsb")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+  listings       Listing[]
+  @@index([seriesId])
+  @@index([fuelType])
+  @@index([engineCc])
+  @@map("vehicle_variants")
+}
+
+// ── Müşteri Talepleri (Lead) ──────────────────────────────────────────────
+
+model Lead {
+  id          String   @id @default(cuid())
+  name        String
+  phone       String
+  email       String?
+  listingId   String?  @map("listing_id")
+  listing     Listing? @relation(fields: [listingId], references: [id], onDelete: SetNull)
+  message     String?
+  status      String   @default("new") // new | contacted | interested | no_response | converted | lost
+  notes       LeadNote[]
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  @@index([status])
+  @@index([listingId])
+  @@index([createdAt])
+  @@map("leads")
+}
+
+model LeadNote {
+  id        String   @id @default(cuid())
+  leadId    String   @map("lead_id")
+  lead      Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  content   String
+  createdAt DateTime @default(now()) @map("created_at")
+  @@index([leadId])
+  @@map("lead_notes")
+}
+
+// ── Esnaf/Galeri (B2B) ────────────────────────────────────────────────────
+
+model Dealer {
+  id                String    @id @default(cuid())
+  name              String
+  city              String
+  phone             String
+  email             String?
+  subscriptionPlan  String    @default("none") @map("subscription_plan") // none | founder | standard | premium
+  subscriptionPrice Float?    @map("subscription_price")
+  subscriptionStatus String   @default("inactive") @map("subscription_status") // inactive | active | overdue | cancelled
+  lastPaymentDate   DateTime? @map("last_payment_date")
+  nextPaymentDue    DateTime? @map("next_payment_due")
+  listings          Listing[]
+  salesVisits       SalesVisit[]
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+  @@index([subscriptionStatus])
+  @@index([city])
+  @@map("dealers")
+}
+
+// ── Saha Satış Takibi ─────────────────────────────────────────────────────
+
+model SalesVisit {
+  id          String    @id @default(cuid())
+  dealerId    String?   @map("dealer_id")
+  dealer      Dealer?   @relation(fields: [dealerId], references: [id], onDelete: SetNull)
+  galleryName String?   @map("gallery_name")
+  city        String
+  contactName String?   @map("contact_name")
+  status      String    @default("visited") // planned | visited | negotiating | signed | rejected
+  notes       String?
+  visitDate   DateTime  @map("visit_date")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  @@index([status])
+  @@index([city])
+  @@index([dealerId])
+  @@map("sales_visits")
+}
+
+// ── Kurumsal Entegrasyon Takibi ───────────────────────────────────────────
+
+model PartnerNegotiation {
+  id              String    @id @default(cuid())
+  companyName     String    @map("company_name")
+  adapterKey      String?   @map("adapter_key")
+  status          String    @default("not_started") // not_started | in_negotiation | agreement_signed | integration_active | rejected
+  contactName     String?   @map("contact_name")
+  contactInfo     String?   @map("contact_info")
+  notes           String?
+  lastContactDate DateTime? @map("last_contact_date")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+  @@index([status])
+  @@index([adapterKey])
+  @@map("partner_negotiations")
 }
